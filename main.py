@@ -41,8 +41,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+if os.path.isdir(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # ---------------------------------------------------------------------------
 # Startup
@@ -50,7 +54,10 @@ templates = Jinja2Templates(directory="templates")
 @app.on_event("startup")
 def on_startup():
     init_db()
-    load_catalog()
+    try:
+        load_catalog()
+    except Exception as e:
+        print(f"Catalog not loaded (OK for cloud deploy): {e}")
 
 # ---------------------------------------------------------------------------
 # HTML Pages
