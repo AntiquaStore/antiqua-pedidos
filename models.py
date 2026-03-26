@@ -256,12 +256,15 @@ def get_dashboard_stats():
     in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='en_taller'").fetchone()["c"]
     revenue = conn.execute("SELECT COALESCE(SUM(pvp),0) as s FROM orders").fetchone()["s"]
 
-    # Joyas vs Joyeros counts
+    # Joyas vs Joyeros vs Cadenas counts
     joyas_count = conn.execute(
-        "SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') != 'joyero'"
+        "SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya'"
     ).fetchone()["c"]
     joyeros_count = conn.execute(
         "SELECT COUNT(*) as c FROM orders WHERE product_type = 'joyero'"
+    ).fetchone()["c"]
+    cadenas_count = conn.execute(
+        "SELECT COUNT(*) as c FROM orders WHERE product_type = 'cadena'"
     ).fetchone()["c"]
 
     # Unique tickets & avg ticket (joyas only, merging split payments)
@@ -272,7 +275,7 @@ def get_dashboard_stats():
         SELECT SUM(pvp) as ticket_pvp
         FROM orders
         WHERE payment_group IS NOT NULL AND payment_group != ''
-          AND COALESCE(product_type,'joya') != 'joyero'
+          AND COALESCE(product_type,'joya') = 'joya'
         GROUP BY payment_group
     """).fetchall()
 
@@ -280,7 +283,7 @@ def get_dashboard_stats():
         SELECT pvp as ticket_pvp
         FROM orders
         WHERE (payment_group IS NULL OR payment_group = '')
-          AND COALESCE(product_type,'joya') != 'joyero'
+          AND COALESCE(product_type,'joya') = 'joya'
           AND pvp > 0
     """).fetchall()
 
@@ -306,6 +309,7 @@ def get_dashboard_stats():
         "avg_ticket": avg_ticket,
         "joyas_count": joyas_count,
         "joyeros_count": joyeros_count,
+        "cadenas_count": cadenas_count,
         "unique_tickets": unique_tickets,
         "avg_ticket_joyas": avg_ticket_joyas,
     }
