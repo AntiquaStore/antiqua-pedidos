@@ -149,12 +149,27 @@
         </div>
     </div>
 
-    <!-- Ticket medio (joyas) -->
+    <!-- Ticket medio sin IVA -->
     <div class="bg-white border border-line p-6">
         <div class="flex items-start justify-between">
             <div>
                 <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.avg_ticket_joyas or 0)|replace(",", ".") }} €</p>
-                <p class="text-sm text-secondary mt-1 tracking-wide">Ticket medio (joyas)</p>
+                <p class="text-sm text-secondary mt-1 tracking-wide">Ticket medio sin IVA</p>
+            </div>
+            <div class="w-10 h-10 flex items-center justify-center bg-dark/5">
+                <svg class="w-5 h-5 text-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="square" stroke-width="1.5" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ticket medio con IVA -->
+    <div class="bg-white border border-line p-6">
+        <div class="flex items-start justify-between">
+            <div>
+                <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.avg_ticket_joyas_iva or 0)|replace(",", ".") }} €</p>
+                <p class="text-sm text-secondary mt-1 tracking-wide">Ticket medio con IVA</p>
             </div>
             <div class="w-10 h-10 flex items-center justify-center bg-dark/5">
                 <svg class="w-5 h-5 text-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">

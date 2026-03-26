@@ -301,6 +301,9 @@ def get_dashboard_stats():
         "SELECT COALESCE(AVG(pvp),0) as a FROM orders WHERE pvp > 0"
     ).fetchone()["a"]
 
+    # Ticket medio con IVA (joyas only, same logic as avg_ticket_joyas but with IVA)
+    avg_ticket_joyas_iva = avg_ticket_joyas * 1.21 if avg_ticket_joyas else 0
+
     conn.close()
     return {
         "total": total,
@@ -314,6 +317,7 @@ def get_dashboard_stats():
         "cadenas_count": cadenas_count,
         "unique_tickets": unique_tickets,
         "avg_ticket_joyas": avg_ticket_joyas,
+        "avg_ticket_joyas_iva": avg_ticket_joyas_iva,
     }
 
 
