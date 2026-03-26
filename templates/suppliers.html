@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="mb-8">
+    <h1 class="text-2xl md:text-3xl text-dark">Proveedores</h1>
+</div>
+
+<!-- Error message -->
+{% if error %}
+<div class="border border-red-300 bg-red-50 px-5 py-4 mb-6">
+    <p class="text-sm text-red-700">{{ error }}</p>
+</div>
+{% endif %}
+
+<!-- Supplier cards grid -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    {# ── Lola — MAS GEMAS ── #}
+    <div class="bg-white border border-line p-6">
+        <!-- Header -->
+        <div class="mb-5">
+            <h2 class="text-xl text-dark">Lola — MAS GEMAS</h2>
+            <p class="text-sm text-taupe mt-1">Piedras de color</p>
+        </div>
+
+        <!-- Contact -->
+        <div class="flex flex-col sm:flex-row gap-3 sm:gap-6 mb-6 text-sm text-secondary">
+            <span>info@masgemasyjoyas.es</span>
+            <span>+34 666 588 527</span>
+        </div>
+
+        <!-- KPIs -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="border border-line p-4">
+                <p class="text-xs uppercase tracking-wider text-secondary font-semibold mb-1">Total estimado</p>
+                <p class="text-xl font-bold text-dark tabular-nums" style="font-family: 'Libre Baskerville', serif;">
+                    {{ "{:,.2f}".format(lola_summary.total_estimado or 0)|replace(",", ".") }} €
+                </p>
+            </div>
+            <div class="border border-line p-4">
+                <p class="text-xs uppercase tracking-wider text-secondary font-semibold mb-1">Total real</p>
+                <p class="text-xl font-bold text-dark tabular-nums" style="font-family: 'Libre Baskerville', serif;">
+                    {{ "{:,.2f}".format(lola_summary.total_real or 0)|replace(",", ".") }} €
+                </p>
+            </div>
+        </div>
+
+        <!-- Pagos pendientes -->
+        <div class="mb-6">
+            <h3 class="text-sm uppercase tracking-wider text-secondary font-semibold mb-3">Pagos pendientes</h3>
+            {% if lola_summary.pending_payment %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-[#f8f7f5] border-b border-line">
+                            <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Pieza</th>
+                            <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Fecha pedido</th>
+                            <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Importe</th>
+                            <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for o in lola_summary.pending_payment %}
+                        <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
+                            <td class="px-3 py-2 text-dark font-medium">{{ o.product_title or '-' }}</td>
+                            <td class="px-3 py-2 text-secondary">{{ o.created_at[:10] if o.created_at else '-' }}</td>
+                            <td class="px-3 py-2 text-dark text-right tabular-nums">{{ "{:,.2f}".format(o.amount or 0)|replace(",", ".") }} €</td>
+                            <td class="px-3 py-2 text-right">
+                                <a href="/order/{{ o.id }}" class="text-taupe hover:text-bronze transition-colors font-medium">Ver pedido</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-sm text-secondary/60">Sin pagos pendientes</p>
+            {% endif %}
+        </div>
+
+        <!-- Pagos realizados -->
+        <div>
+            <h3 class="text-sm uppercase tracking-wider text-secondary font-semibold mb-3">Pagos realizados</h3>
+            {% if lola_summary.paid %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-[#f8f7f5] border-b border-line">
+                            <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Pieza</th>
+                            <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Fecha pago</th>
+                            <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for o in lola_summary.paid %}
+                        <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
+                            <td class="px-3 py-2 text-dark font-medium">{{ o.product_title or '-' }}</td>
+                            <td class="px-3 py-2 text-secondary">{{ o.paid_at[:10] if o.paid_at else '-' }}</td>
+                            <td class="px-3 py-2 text-dark text-right tabular-nums">{{ "{:,.2f}".format(o.amount or 0)|replace(",", ".") }} €</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-sm text-secondary/60">Sin pagos registrados</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Barto — NOVAO MB18 SL ── #}
+    <div class="bg-white border border-line p-6">
+        <!-- Header -->
+        <div class="mb-5">
+            <h2 class="text-xl text-dark">Barto — NOVAO MB18 SL</h2>
+            <p class="text-sm text-taupe mt-1">Taller + Diamantes</p>
+        </div>
+
+        <!-- Contact -->
+        <div class="flex flex-col sm:flex-row gap-3 sm:gap-6 mb-6 text-sm text-secondary">
+            <span>novaomb18@gmail.com</span>
+            <span>+34 659 319 904</span>
+        </div>
+
+        <!-- KPIs -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="border border-line p-4">
+                <p class="text-xs uppercase tracking-wider text-secondary font-semibold mb-1">Total estimado</p>
+                <p class="text-xl font-bold text-dark tabular-nums" style="font-family: 'Libre Baskerville', serif;">
+                    {{ "{:,.2f}".format(barto_summary.total_estimado or 0)|replace(",", ".") }} €
+                </p>
+            </div>
+            <div class="border border-line p-4">
+                <p class="text-xs uppercase tracking-wider text-secondary font-semibold mb-1">Total real</p>
+                <p class="text-xl font-bold text-dark tabular-nums" style="font-family: 'Libre Baskerville', serif;">
+                    {{ "{:,.2f}".format(barto_summary.total_real or 0)|replace(",", ".") }} €
+                </p>
+            </div>
+        </div>
+
+        <!-- Pagos pendientes -->
+        <div class="mb-6">
+            <h3 class="text-sm uppercase tracking-wider text-secondary font-semibold mb-3">Pagos pendientes</h3>
+            {% if barto_summary.pending_payment %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-[#f8f7f5] border-b border-line">
+                            <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Pieza</th>
+                            <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Fecha pedido</th>
+                            <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Importe</th>
+                            <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for o in barto_summary.pending_payment %}
+                        <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
+                            <td class="px-3 py-2 text-dark font-medium">{{ o.product_title or '-' }}</td>
+                            <td class="px-3 py-2 text-secondary">{{ o.created_at[:10] if o.created_at else '-' }}</td>
+                            <td class="px-3 py-2 text-dark text-right tabular-nums">{{ "{:,.2f}".format(o.amount or 0)|replace(",", ".") }} €</td>
+                            <td class="px-3 py-2 text-right">
+                                <a href="/order/{{ o.id }}" class="text-taupe hover:text-bronze transition-colors font-medium">Ver pedido</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-sm text-secondary/60">Sin pagos pendientes</p>
+            {% endif %}
+        </div>
+
+        <!-- Pagos realizados -->
+        <div>
+            <h3 class="text-sm uppercase tracking-wider text-secondary font-semibold mb-3">Pagos realizados</h3>
+            {% if barto_summary.paid %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-[#f8f7f5] border-b border-line">
+                            <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Pieza</th>
+                            <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Fecha pago</th>
+                            <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-3 py-2">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for o in barto_summary.paid %}
+                        <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
+                            <td class="px-3 py-2 text-dark font-medium">{{ o.product_title or '-' }}</td>
+                            <td class="px-3 py-2 text-secondary">{{ o.paid_at[:10] if o.paid_at else '-' }}</td>
+                            <td class="px-3 py-2 text-dark text-right tabular-nums">{{ "{:,.2f}".format(o.amount or 0)|replace(",", ".") }} €</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-sm text-secondary/60">Sin pagos registrados</p>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

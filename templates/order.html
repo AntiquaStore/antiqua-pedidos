@@ -1,0 +1,478 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{# ── Macros ── #}
+{% macro fmt_eur(val) %}
+{%- if val is not none %}{{ "%.2f"|format(val) }} &euro;{% else %}<span class="text-secondary">&mdash;</span>{% endif -%}
+{% endmacro %}
+
+{% macro fmt_gr(val) %}
+{%- if val is not none %}{{ "%.1f"|format(val) }} gr{% else %}<span class="text-secondary">&mdash;</span>{% endif -%}
+{% endmacro %}
+
+{% macro fmt_eur_gr(val) %}
+{%- if val is not none %}{{ "%.2f"|format(val) }} &euro;/gr{% else %}<span class="text-secondary">&mdash;</span>{% endif -%}
+{% endmacro %}
+
+{# Highlight helper: red if real > est by >10%, green if real < est by >10% #}
+{% macro cost_cell(est, real) %}
+{% if real is not none and est is not none and est != 0 %}
+    {% set pct = ((real - est) / est) * 100 %}
+    {% if pct > 10 %}
+    <td class="px-4 py-3 text-right bg-red-50 text-[#9B2226] font-medium">{{ "%.2f"|format(real) }} &euro;</td>
+    {% elif pct < -10 %}
+    <td class="px-4 py-3 text-right bg-green-50 text-[#4a7c59] font-medium">{{ "%.2f"|format(real) }} &euro;</td>
+    {% else %}
+    <td class="px-4 py-3 text-right">{{ "%.2f"|format(real) }} &euro;</td>
+    {% endif %}
+{% elif real is not none %}
+    <td class="px-4 py-3 text-right">{{ "%.2f"|format(real) }} &euro;</td>
+{% else %}
+    <td class="px-4 py-3 text-right text-secondary">&mdash;</td>
+{% endif %}
+{% endmacro %}
+
+{# ── Error banner ── #}
+{% if error %}
+<div class="mb-6 border border-[#9B2226] bg-red-50 px-4 py-3 text-[#9B2226] text-sm">
+    {{ error }}
+</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════
+   1. BACK LINK + HEADER
+   ══════════════════════════════════════════════════════════════ #}
+<div class="mb-8">
+    <a href="/" class="inline-flex items-center text-sm text-secondary hover:text-taupe transition-colors tracking-wide uppercase mb-4">
+        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="square" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+        Volver a pedidos
+    </a>
+
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h1 class="text-2xl lg:text-3xl text-dark">
+                Pedido {{ order.shopify_order_number }}
+                <span class="text-lg text-secondary font-normal">&mdash; {{ order.product_name }}</span>
+            </h1>
+        </div>
+        <div class="flex items-center gap-4">
+            {# Status badge #}
+            {% set status_colors = {
+                'nuevo':      'bg-[#5a7b9a] text-white',
+                'notificado': 'bg-bronze text-white',
+                'en_taller':  'bg-taupe text-white',
+                'entregado':  'bg-[#4a7c59] text-white',
+                'completado': 'bg-dark text-white'
+            } %}
+            <span class="inline-block px-3 py-1 text-xs font-semibold uppercase tracking-wide {{ status_colors.get(order.status, 'bg-line text-dark') }}">
+                {{ order.status | replace('_', ' ') | capitalize }}
+            </span>
+            {% if order.fecha_pedido %}
+            <span class="text-sm text-secondary">{{ order.fecha_pedido }}</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════
+   2. INFO GRID — Customer + Product
+   ══════════════════════════════════════════════════════════════ #}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+    {# Customer card #}
+    <div class="bg-white border border-line p-6">
+        <h2 class="text-lg mb-4 text-dark">Cliente</h2>
+        <dl class="space-y-3 text-sm">
+            <div>
+                <dt class="text-secondary uppercase tracking-wide text-xs mb-0.5">Nombre</dt>
+                <dd class="text-dark font-medium">{{ order.customer_name or '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-secondary uppercase tracking-wide text-xs mb-0.5">Email</dt>
+                <dd>
+                    {% if order.customer_email %}
+                    <a href="mailto:{{ order.customer_email }}" class="text-[#5a7b9a] hover:underline">{{ order.customer_email }}</a>
+                    {% else %}<span class="text-secondary">&mdash;</span>{% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-secondary uppercase tracking-wide text-xs mb-0.5">Teléfono</dt>
+                <dd class="text-dark">{{ order.customer_phone or '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-secondary uppercase tracking-wide text-xs mb-0.5">Dirección</dt>
+                <dd class="text-dark whitespace-pre-line">{{ order.customer_address or '—' }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    {# Product card #}
+    <div class="bg-white border border-line p-6">
+        <h2 class="text-lg mb-4 text-dark">Producto</h2>
+        <dl class="space-y-3 text-sm">
+            <div>
+                <dt class="text-secondary uppercase tracking-wide text-xs mb-0.5">Nombre</dt>
+                <dd class="text-dark font-medium">{{ order.product_name or '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-secondary uppercase tracking-wide text-xs mb-0.5">Tipo</dt>
+                <dd class="text-dark">{{ order.product_type or '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-secondary uppercase tracking-wide text-xs mb-0.5">Talla de anillo</dt>
+                <dd class="text-dark">{{ order.ring_size or '—' }}</dd>
+            </div>
+            <div>
+                <dt class="text-secondary uppercase tracking-wide text-xs mb-0.5">Variante</dt>
+                <dd class="text-dark">{{ order.variant or '—' }}</dd>
+            </div>
+        </dl>
+    </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════
+   3. COST COMPARISON TABLE
+   ══════════════════════════════════════════════════════════════ #}
+<div class="bg-white border border-line p-6 mb-8">
+    <h2 class="text-lg mb-6 text-dark">Desglose de costes</h2>
+
+    {# Revenue summary #}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 pb-6 border-b border-line">
+        <div>
+            <span class="block text-xs text-secondary uppercase tracking-wide mb-1">PVP</span>
+            <span class="text-dark font-semibold">{{ fmt_eur(order.pvp) }}</span>
+        </div>
+        <div>
+            <span class="block text-xs text-secondary uppercase tracking-wide mb-1">IVA</span>
+            <span class="text-dark font-semibold">{{ fmt_eur(order.iva) }}</span>
+        </div>
+        <div>
+            <span class="block text-xs text-secondary uppercase tracking-wide mb-1">Base imponible</span>
+            <span class="text-dark font-semibold">{{ fmt_eur(order.base_imponible) }}</span>
+        </div>
+        <div>
+            <span class="block text-xs text-secondary uppercase tracking-wide mb-1">Comisión</span>
+            <span class="text-dark font-semibold">{{ fmt_eur(order.comision) }}</span>
+        </div>
+    </div>
+
+    {# Cost table #}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b-2 border-line">
+                    <th class="text-left px-4 py-3 text-xs text-secondary uppercase tracking-wide font-semibold">Concepto</th>
+                    <th class="text-right px-4 py-3 text-xs text-secondary uppercase tracking-wide font-semibold">Estimado</th>
+                    <th class="text-right px-4 py-3 text-xs text-secondary uppercase tracking-wide font-semibold">Real</th>
+                </tr>
+            </thead>
+            <tbody>
+                {# Lola #}
+                <tr class="border-b border-line">
+                    <td class="px-4 py-3 text-dark">Lola <span class="text-secondary text-xs">(piedras)</span></td>
+                    <td class="px-4 py-3 text-right">{{ fmt_eur(order.lola_estimado) }}</td>
+                    {{ cost_cell(order.lola_estimado, order.lola_real) }}
+                </tr>
+                {# Barto #}
+                <tr class="border-b border-line">
+                    <td class="px-4 py-3 text-dark">Barto <span class="text-secondary text-xs">(taller + diamantes)</span></td>
+                    <td class="px-4 py-3 text-right">{{ fmt_eur(order.barto_estimado) }}</td>
+                    {{ cost_cell(order.barto_estimado, order.barto_real) }}
+                </tr>
+                {# Oro #}
+                <tr class="border-b border-line">
+                    <td class="px-4 py-3 text-dark">
+                        Oro <span class="text-secondary text-xs">(peso &times; precio)</span>
+                        <div class="text-xs text-secondary mt-1">
+                            Est: {{ fmt_gr(order.peso_estimado) }} &times; {{ fmt_eur_gr(order.precio_oro_estimado) }}
+                            {% if order.peso_real is not none %}
+                            <br>Real: {{ fmt_gr(order.peso_real) }} &times; {{ fmt_eur_gr(order.precio_oro_real) }}
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-right align-top">{{ fmt_eur(order.oro_total_estimado) }}</td>
+                    {{ cost_cell(order.oro_total_estimado, order.oro_total_real) }}
+                </tr>
+                {# Envio/Packaging #}
+                <tr class="border-b border-line">
+                    <td class="px-4 py-3 text-dark">Envío / Packaging</td>
+                    <td class="px-4 py-3 text-right">{{ fmt_eur(order.envio_packaging) }}</td>
+                    <td class="px-4 py-3 text-right">{{ fmt_eur(order.envio_packaging) }}</td>
+                </tr>
+                {# CMV Total #}
+                <tr class="border-t-2 border-dark">
+                    <td class="px-4 py-3 text-dark font-bold">CMV Total</td>
+                    <td class="px-4 py-3 text-right font-bold">{{ fmt_eur(order.cmv_estimado) }}</td>
+                    {% if order.cmv_real is not none %}
+                    <td class="px-4 py-3 text-right font-bold">{{ "%.2f"|format(order.cmv_real) }} &euro;</td>
+                    {% else %}
+                    <td class="px-4 py-3 text-right text-secondary">&mdash;</td>
+                    {% endif %}
+                </tr>
+                {# Margen bruto #}
+                <tr class="border-t border-line">
+                    <td class="px-4 py-3 text-dark font-bold">Margen bruto</td>
+                    <td class="px-4 py-3 text-right font-bold {% if order.beneficio_bruto_estimado is not none %}{{ 'text-[#4a7c59]' if order.beneficio_bruto_estimado >= 0 else 'text-[#9B2226]' }}{% endif %}">
+                        {{ fmt_eur(order.beneficio_bruto_estimado) }}
+                    </td>
+                    {% if order.beneficio_bruto_real is not none %}
+                    <td class="px-4 py-3 text-right font-bold {{ 'text-[#4a7c59]' if order.beneficio_bruto_real >= 0 else 'text-[#9B2226]' }}">
+                        {{ "%.2f"|format(order.beneficio_bruto_real) }} &euro;
+                    </td>
+                    {% else %}
+                    <td class="px-4 py-3 text-right text-secondary">&mdash;</td>
+                    {% endif %}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════
+   4. UPDATE REAL COSTS FORM
+   ══════════════════════════════════════════════════════════════ #}
+{% if order.status != 'completado' %}
+<div class="bg-white border border-line p-6 mb-8"
+     x-data="{
+        lola_real: {{ order.lola_real if order.lola_real is not none else order.lola_estimado or 0 }},
+        barto_real: {{ order.barto_real if order.barto_real is not none else order.barto_estimado or 0 }},
+        peso_real: {{ order.peso_real if order.peso_real is not none else order.peso_estimado or 0 }},
+        precio_oro_real: {{ order.precio_oro_real if order.precio_oro_real is not none else order.precio_oro_estimado or 0 }},
+        envio_packaging: {{ order.envio_packaging or 0 }},
+        ingreso: {{ order.ingreso_total or 0 }},
+        get oro_total() { return +(this.peso_real * this.precio_oro_real).toFixed(2) },
+        get cmv_total() { return +(this.lola_real + this.barto_real + this.oro_total + this.envio_packaging).toFixed(2) },
+        get beneficio() { return +(this.ingreso - this.cmv_total).toFixed(2) },
+        submitting: false,
+        async submit() {
+            this.submitting = true;
+            try {
+                const res = await fetch('/api/orders/{{ order.id }}/update-costs', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        lola_real: this.lola_real,
+                        barto_real: this.barto_real,
+                        peso_real: this.peso_real,
+                        precio_oro_real: this.precio_oro_real,
+                        envio_packaging: this.envio_packaging
+                    })
+                });
+                if (res.ok) { window.location.reload(); }
+                else { alert('Error al guardar los costes.'); }
+            } finally { this.submitting = false; }
+        }
+     }">
+    <h2 class="text-lg mb-6 text-dark">Actualizar costes reales</h2>
+
+    <form @submit.prevent="submit()">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <div>
+                <label class="block text-xs text-secondary uppercase tracking-wide font-semibold mb-1">Lola real (&euro;)</label>
+                <input type="number" step="0.01" x-model.number="lola_real"
+                       class="w-full border border-line px-3 py-2 text-sm text-dark focus:border-taupe outline-none">
+            </div>
+            <div>
+                <label class="block text-xs text-secondary uppercase tracking-wide font-semibold mb-1">Barto real (&euro;)</label>
+                <input type="number" step="0.01" x-model.number="barto_real"
+                       class="w-full border border-line px-3 py-2 text-sm text-dark focus:border-taupe outline-none">
+            </div>
+            <div>
+                <label class="block text-xs text-secondary uppercase tracking-wide font-semibold mb-1">Peso real (gr)</label>
+                <input type="number" step="0.1" x-model.number="peso_real"
+                       class="w-full border border-line px-3 py-2 text-sm text-dark focus:border-taupe outline-none">
+            </div>
+            <div>
+                <label class="block text-xs text-secondary uppercase tracking-wide font-semibold mb-1">Precio oro real (&euro;/gr)</label>
+                <input type="number" step="0.01" x-model.number="precio_oro_real"
+                       class="w-full border border-line px-3 py-2 text-sm text-dark focus:border-taupe outline-none">
+            </div>
+            <div>
+                <label class="block text-xs text-secondary uppercase tracking-wide font-semibold mb-1">Envío / Packaging (&euro;)</label>
+                <input type="number" step="0.01" x-model.number="envio_packaging"
+                       class="w-full border border-line px-3 py-2 text-sm text-dark focus:border-taupe outline-none">
+            </div>
+        </div>
+
+        {# Live preview #}
+        <div class="grid grid-cols-3 gap-4 p-4 border border-line bg-cream mb-6">
+            <div>
+                <span class="block text-xs text-secondary uppercase tracking-wide mb-1">Oro total</span>
+                <span class="font-semibold text-dark" x-text="oro_total.toFixed(2) + ' €'"></span>
+            </div>
+            <div>
+                <span class="block text-xs text-secondary uppercase tracking-wide mb-1">CMV total</span>
+                <span class="font-semibold text-dark" x-text="cmv_total.toFixed(2) + ' €'"></span>
+            </div>
+            <div>
+                <span class="block text-xs text-secondary uppercase tracking-wide mb-1">Beneficio bruto</span>
+                <span class="font-semibold"
+                      :class="beneficio >= 0 ? 'text-[#4a7c59]' : 'text-[#9B2226]'"
+                      x-text="beneficio.toFixed(2) + ' €'"></span>
+            </div>
+        </div>
+
+        <button type="submit" :disabled="submitting"
+                class="bg-dark text-white px-6 py-2.5 text-sm font-semibold uppercase tracking-wide hover:bg-taupe transition-colors disabled:opacity-50">
+            <span x-show="!submitting">Guardar costes reales</span>
+            <span x-show="submitting" x-cloak>Guardando&hellip;</span>
+        </button>
+    </form>
+</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════
+   5. SUPPLIER NOTIFICATIONS
+   ══════════════════════════════════════════════════════════════ #}
+{% if notification_preview %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+
+    {# ── Lola (MAS GEMAS) ── #}
+    {% if notification_preview.lola %}
+    <div class="bg-white border border-line p-6" x-data="{ sending: false }">
+        <h3 class="text-base font-bold text-dark mb-1" style="font-family: 'Figtree', sans-serif;">Lola &mdash; MAS GEMAS</h3>
+        {% if notification_preview.lola.to %}
+        <p class="text-xs text-secondary mb-4">{{ notification_preview.lola.to }}</p>
+        {% endif %}
+
+        <div class="mb-4">
+            <p class="text-xs text-secondary uppercase tracking-wide mb-1">Asunto del email</p>
+            <p class="text-sm text-dark">{{ notification_preview.lola.email_subject }}</p>
+        </div>
+        <div class="mb-4">
+            <p class="text-xs text-secondary uppercase tracking-wide mb-1">Mensaje</p>
+            <p class="text-sm text-secondary line-clamp-3">{{ notification_preview.lola.email_body | truncate(200) }}</p>
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+            <button @click="
+                sending = true;
+                fetch('/api/orders/{{ order.id }}/notify/lola', { method: 'POST' })
+                    .then(r => { if (r.ok) window.location.reload(); else alert('Error al enviar.'); })
+                    .finally(() => sending = false);
+            " :disabled="sending"
+               class="bg-dark text-white px-4 py-2 text-sm font-semibold uppercase tracking-wide hover:bg-taupe transition-colors disabled:opacity-50">
+                <span x-show="!sending">Enviar email</span>
+                <span x-show="sending" x-cloak>Enviando&hellip;</span>
+            </button>
+            {% if notification_preview.lola.whatsapp_link %}
+            <a href="{{ notification_preview.lola.whatsapp_link }}" target="_blank" rel="noopener"
+               class="inline-flex items-center bg-[#25D366] text-white px-4 py-2 text-sm font-semibold uppercase tracking-wide hover:opacity-90 transition-opacity">
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.553 4.12 1.52 5.856L.057 23.988l6.272-1.445A11.944 11.944 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.82a9.796 9.796 0 01-5.348-1.586l-.384-.228-3.728.859.894-3.636-.252-.399A9.802 9.802 0 012.18 12c0-5.422 4.398-9.82 9.82-9.82 5.422 0 9.82 4.398 9.82 9.82 0 5.422-4.398 9.82-9.82 9.82z"/></svg>
+                WhatsApp
+            </a>
+            {% endif %}
+        </div>
+
+        {% if order.lola_notified_at %}
+        <p class="mt-4 text-xs text-[#4a7c59] font-medium">Notificada el {{ order.lola_notified_at }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# ── Barto (NOVAO MB18 SL) ── #}
+    {% if notification_preview.barto %}
+    <div class="bg-white border border-line p-6" x-data="{ sending: false }">
+        <h3 class="text-base font-bold text-dark mb-1" style="font-family: 'Figtree', sans-serif;">Barto &mdash; NOVAO MB18 SL</h3>
+        {% if notification_preview.barto.to %}
+        <p class="text-xs text-secondary mb-4">{{ notification_preview.barto.to }}</p>
+        {% endif %}
+
+        <div class="mb-4">
+            <p class="text-xs text-secondary uppercase tracking-wide mb-1">Asunto del email</p>
+            <p class="text-sm text-dark">{{ notification_preview.barto.email_subject }}</p>
+        </div>
+        <div class="mb-4">
+            <p class="text-xs text-secondary uppercase tracking-wide mb-1">Mensaje</p>
+            <p class="text-sm text-secondary line-clamp-3">{{ notification_preview.barto.email_body | truncate(200) }}</p>
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+            <button @click="
+                sending = true;
+                fetch('/api/orders/{{ order.id }}/notify/barto', { method: 'POST' })
+                    .then(r => { if (r.ok) window.location.reload(); else alert('Error al enviar.'); })
+                    .finally(() => sending = false);
+            " :disabled="sending"
+               class="bg-dark text-white px-4 py-2 text-sm font-semibold uppercase tracking-wide hover:bg-taupe transition-colors disabled:opacity-50">
+                <span x-show="!sending">Enviar email</span>
+                <span x-show="sending" x-cloak>Enviando&hellip;</span>
+            </button>
+            {% if notification_preview.barto.whatsapp_link %}
+            <a href="{{ notification_preview.barto.whatsapp_link }}" target="_blank" rel="noopener"
+               class="inline-flex items-center bg-[#25D366] text-white px-4 py-2 text-sm font-semibold uppercase tracking-wide hover:opacity-90 transition-opacity">
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.553 4.12 1.52 5.856L.057 23.988l6.272-1.445A11.944 11.944 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.82a9.796 9.796 0 01-5.348-1.586l-.384-.228-3.728.859.894-3.636-.252-.399A9.802 9.802 0 012.18 12c0-5.422 4.398-9.82 9.82-9.82 5.422 0 9.82 4.398 9.82 9.82 0 5.422-4.398 9.82-9.82 9.82z"/></svg>
+                WhatsApp
+            </a>
+            {% endif %}
+        </div>
+
+        {% if order.barto_notified_at %}
+        <p class="mt-4 text-xs text-[#4a7c59] font-medium">Notificado el {{ order.barto_notified_at }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════
+   6. STATUS CHANGE BUTTONS
+   ══════════════════════════════════════════════════════════════ #}
+{% set transitions = {
+    'nuevo':      {'next': 'notificado', 'label': 'Marcar como Notificado'},
+    'notificado': {'next': 'en_taller',  'label': 'Marcar como En Taller'},
+    'en_taller':  {'next': 'entregado',  'label': 'Marcar como Entregado'},
+    'entregado':  {'next': 'completado', 'label': 'Marcar como Completado'}
+} %}
+
+{% if order.status in transitions %}
+<div class="mb-8" x-data="{ changing: false }">
+    <button @click="
+        changing = true;
+        fetch('/api/orders/{{ order.id }}/status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ status: '{{ transitions[order.status].next }}' })
+        })
+        .then(r => { if (r.ok) window.location.reload(); else alert('Error al cambiar el estado.'); })
+        .finally(() => changing = false);
+    " :disabled="changing"
+       class="border border-line text-dark px-6 py-2.5 text-sm font-semibold uppercase tracking-wide hover:border-taupe transition-colors disabled:opacity-50">
+        <span x-show="!changing">{{ transitions[order.status].label }}</span>
+        <span x-show="changing" x-cloak>Actualizando&hellip;</span>
+    </button>
+</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════
+   7. ACTIVITY TIMELINE
+   ══════════════════════════════════════════════════════════════ #}
+<div class="bg-white border border-line p-6">
+    <h2 class="text-lg mb-6 text-dark">Historial</h2>
+
+    {% if activity_log %}
+    <div class="relative pl-6">
+        {# Vertical line #}
+        <div class="absolute left-2 top-1 bottom-1 w-px bg-line"></div>
+
+        {% for entry in activity_log %}
+        <div class="relative mb-6 last:mb-0">
+            {# Dot #}
+            <div class="absolute -left-4 top-1.5 w-2.5 h-2.5 bg-taupe border-2 border-white"></div>
+            <div>
+                <p class="text-sm text-dark font-medium">{{ entry.action }}</p>
+                {% if entry.details %}
+                <p class="text-sm text-secondary mt-0.5">{{ entry.details }}</p>
+                {% endif %}
+                <p class="text-xs text-secondary mt-1">{{ entry.created_at }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-secondary">Sin actividad registrada</p>
+    {% endif %}
+</div>
+
+{% endblock %}

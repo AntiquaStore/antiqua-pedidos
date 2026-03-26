@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antiqua | Pedidos</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS v3 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        taupe: '#918a77',
+                        bronze: '#ab8c52',
+                        cream: '#fbfbfb',
+                        dark: '#212121',
+                        secondary: '#626262',
+                        line: '#e5e2dc',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Figtree', sans-serif;
+            background-color: #fbfbfb;
+            color: #212121;
+        }
+        h1, h2, h3 {
+            font-family: 'Libre Baskerville', serif;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #fbfbfb;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e5e2dc;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #918a77;
+        }
+    </style>
+
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-cream min-h-screen flex flex-col">
+
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 bg-white border-b border-line z-50" x-data="{ mobileOpen: false }">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <a href="/" class="font-bold text-xl tracking-widest text-dark" style="font-family: 'Libre Baskerville', serif;">
+                    ANTIQUA
+                </a>
+
+                <!-- Desktop nav links -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="/" class="text-sm font-medium text-dark hover:text-taupe transition-colors tracking-wide uppercase">Pedidos</a>
+                    <a href="/products" class="text-sm font-medium text-secondary hover:text-taupe transition-colors tracking-wide uppercase">Catálogo</a>
+                    <a href="/suppliers" class="text-sm font-medium text-secondary hover:text-taupe transition-colors tracking-wide uppercase">Proveedores</a>
+                </div>
+
+                <!-- Gold price (desktop) -->
+                <div class="hidden md:flex items-center">
+                    {% if gold_price is defined and gold_price %}
+                    <span class="text-xs text-secondary uppercase tracking-wide mr-2">Oro</span>
+                    <span class="text-sm font-semibold text-bronze">{{ "%.2f"|format(gold_price) }} €/oz</span>
+                    {% endif %}
+                </div>
+
+                <!-- Mobile hamburger -->
+                <button @click="mobileOpen = !mobileOpen" class="md:hidden p-2 text-dark" aria-label="Menú">
+                    <svg x-show="!mobileOpen" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                    <svg x-show="mobileOpen" x-cloak class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile menu -->
+        <div x-show="mobileOpen" x-cloak x-transition:enter="transition ease-out duration-150"
+             x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-100"
+             x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1"
+             class="md:hidden bg-white border-b border-line">
+            <div class="px-4 py-4 space-y-3">
+                <a href="/" class="block text-sm font-medium text-dark tracking-wide uppercase">Pedidos</a>
+                <a href="/products" class="block text-sm font-medium text-secondary tracking-wide uppercase">Catálogo</a>
+                <a href="/suppliers" class="block text-sm font-medium text-secondary tracking-wide uppercase">Proveedores</a>
+                {% if gold_price is defined and gold_price %}
+                <div class="pt-3 border-t border-line">
+                    <span class="text-xs text-secondary uppercase tracking-wide mr-2">Oro</span>
+                    <span class="text-sm font-semibold text-bronze">{{ "%.2f"|format(gold_price) }} €/oz</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="pt-20 flex-1">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-line py-8">
+        <p class="text-center text-sm text-secondary tracking-wide">Antiqua &copy; 2026</p>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
