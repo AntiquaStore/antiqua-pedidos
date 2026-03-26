@@ -173,10 +173,10 @@ def sync_from_api(full=False):
     full=True: fetch ALL 2026 orders (ignore since_id). Used for initial load.
     full=False: fetch only new orders since last sync.
     """
+    last_id = models.get_setting("last_shopify_id", "0")
     if full:
         orders = fetch_orders_api(since_id=None)
     else:
-        last_id = models.get_setting("last_shopify_id", "0")
         orders = fetch_orders_api(since_id=last_id if last_id != "0" else None)
 
     gold_price = float(models.get_setting("gold_price", os.getenv("GOLD_PRICE_PER_GRAM", "92.0")))
