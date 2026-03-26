@@ -4,6 +4,7 @@ Lola = MAS GEMAS (piedras de color)
 Barto = NOVAO MB18 SL (taller + diamantes)
 """
 import os, smtplib, urllib.parse
+from datetime import date, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
@@ -38,66 +39,65 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 def email_template_lola(order: dict) -> tuple:
     """Returns (subject, body) for Lola notification."""
     piece = order.get("product_name", "Pieza")
-    size = order.get("ring_size", "")
-    size_txt = f"\n- Talla: {size}" if size else ""
-    est = order.get("lola_estimado", 0)
-    variant = order.get("variant", "")
-    variant_txt = f"\n- Variante: {variant}" if variant else ""
+    piedras_desc = order.get("piedras_desc", "")
 
-    subject = f"Nuevo pedido Antiqua - {piece}"
-    body = f"""Hola Lola,
-
-Tenemos un nuevo pedido:
-- Pieza: {piece}{size_txt}{variant_txt}
-- Presupuesto estimado piedras: {est:.0f} EUR
-
-¿Puedes confirmar disponibilidad y plazo?
-
-Gracias,
-MIMA - Asistente de Antiqua"""
+    subject = f"Pedido Antiqua - {piece}"
+    if piedras_desc:
+        body = f"Hola Lola, necesitamos {piedras_desc} para la sortija {piece} porfa. Se las dejas a Barto?\n\nGracias,\nMIMA - Asistente de Antiqua"
+    else:
+        body = f"Hola Lola, necesitamos las piedras de color para la sortija {piece} porfa. Se las dejas a Barto?\n\nGracias,\nMIMA - Asistente de Antiqua"
     return subject, body
+
+
+def add_business_days(start: date, days: int) -> date:
+    """Add N business days (Mon-Fri) to a date."""
+    current = start
+    added = 0
+    while added < days:
+        current += timedelta(days=1)
+        if current.weekday() < 5:  # Mon=0 .. Fri=4
+            added += 1
+    return current
+
+
+def fecha_limite_entrega() -> str:
+    """Calculate delivery deadline: 18 business days from today."""
+    deadline = add_business_days(date.today(), 18)
+    # Format: "15 de abril"
+    meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+             "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    return f"{deadline.day} de {meses[deadline.month - 1]}"
 
 
 def email_template_barto(order: dict) -> tuple:
     """Returns (subject, body) for Barto notification."""
     piece = order.get("product_name", "Pieza")
     size = order.get("ring_size", "")
-    size_txt = f"\n- Talla: {size}" if size else ""
-    est_taller = order.get("barto_estimado", 0)
-    peso = order.get("peso_estimado", 0)
+    size_txt = f" talla {size}" if size else ""
+    fecha = fecha_limite_entrega()
 
-    subject = f"Nuevo pedido Antiqua - {piece}"
-    body = f"""Hola Barto,
-
-Nuevo pedido para el taller:
-- Pieza: {piece}{size_txt}
-- Peso estimado: {peso:.1f} gr
-- Presupuesto taller + diamantes: {est_taller:.0f} EUR
-
-¿Plazo estimado de entrega?
-
-Gracias,
-MIMA - Asistente de Antiqua"""
+    subject = f"Nuevo pedido - Sortija {piece}"
+    body = f"Nuevo pedido - Sortija {piece}{size_txt} - fecha de entrega limite al cliente {fecha}\n\nMIMA - Asistente de Antiqua"
     return subject, body
 
 
 def whatsapp_template_lola(order: dict) -> str:
     """Short WhatsApp message for Lola."""
     piece = order.get("product_name", "Pieza")
-    size = order.get("ring_size", "")
-    size_txt = f", talla {size}" if size else ""
-    est = order.get("lola_estimado", 0)
-    return f"Hola Lola! Nuevo pedido Antiqua: {piece}{size_txt}. Estimado piedras: {est:.0f}EUR. ¿Disponibilidad y plazo?"
+    piedras_desc = order.get("piedras_desc", "")
+    if piedras_desc:
+        return f"Hola Lola, necesitamos {piedras_desc} para la sortija {piece} porfa. Se las dejas a Barto?"
+    else:
+        return f"Hola Lola, necesitamos las piedras de color para la sortija {piece} porfa. Se las dejas a Barto?"
 
 
 def whatsapp_template_barto(order: dict) -> str:
     """Short WhatsApp message for Barto."""
     piece = order.get("product_name", "Pieza")
     size = order.get("ring_size", "")
-    size_txt = f", talla {size}" if size else ""
-    peso = order.get("peso_estimado", 0)
-    est = order.get("barto_estimado", 0)
-    return f"Hola Barto! Nuevo pedido Antiqua: {piece}{size_txt}. Peso ~{peso:.1f}gr, estimado taller+diamantes: {est:.0f}EUR. ¿Plazo?"
+    size_txt = f" talla {size}" if size else ""
+    fecha = fecha_limite_entrega()
+    return f"Nuevo pedido - Sortija {piece}{size_txt} - fecha de entrega limite al cliente {fecha}"
 
 
 def generate_whatsapp_link(supplier: str, order: dict) -> str:

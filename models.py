@@ -105,6 +105,7 @@ def init_db():
     for col, coltype in [
         ("is_partial_payment", "TEXT DEFAULT '0'"),
         ("payment_group", "TEXT"),
+        ("piedras_desc", "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE orders ADD COLUMN {col} {coltype}")
