@@ -86,7 +86,7 @@ def estimate_costs(product_name: str, pvp: float = None, gold_price: float = Non
         return None
 
     if gold_price is None:
-        gold_price = float(os.getenv("GOLD_PRICE_PER_GRAM", "92.0"))
+        gold_price = 160.0  # Precio estimado conservador (tendencia alcista)
 
     if pvp is None or pvp == 0:
         pvp = product["pvp"]

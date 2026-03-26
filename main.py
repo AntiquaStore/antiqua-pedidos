@@ -21,7 +21,7 @@ from catalog import load_catalog, estimate_costs
 from shopify_client import sync_from_api, sync_from_csv
 from excel_sync import export_order_to_excel, import_excel_to_db, export_all_to_excel
 from notifications import notify_supplier, get_notification_preview, SUPPLIERS
-from gold_price import get_gold_info, get_18k_gold_price
+from gold_price import get_gold_info, get_18k_gold_price, get_current_gold_price
 
 # ---------------------------------------------------------------------------
 # Config
@@ -217,10 +217,25 @@ async def change_status(order_id: str, request: Request):
         if not new_status:
             return JSONResponse({"ok": False, "error": "Falta el campo status"}, status_code=400)
 
-        update_order(order_id, {"status": new_status})
+        update_data = {"status": new_status}
+
+        # When marking as "entregado", auto-capture today's real gold price
+        if new_status == "entregado":
+            real_gold = get_current_gold_price()
+            order = get_order(order_id)
+            if order:
+                peso_est = float(order.get("peso_estimado", 0) or 0)
+                oro_real = peso_est * real_gold
+                update_data["precio_oro_real"] = round(real_gold, 2)
+                update_data["peso_real"] = peso_est  # pre-fill with estimate
+                update_data["oro_total_real"] = round(oro_real, 2)
+                log_activity(order_id, "Precio oro capturado al entregar",
+                             f"Oro 24K: {real_gold:.2f} EUR/gr x {peso_est:.1f}gr = {oro_real:.2f} EUR")
+
+        update_order(order_id, update_data)
         log_activity(order_id, f"Estado cambiado a {new_status}")
 
-        return JSONResponse({"ok": True})
+        return JSONResponse({"ok": True, "gold_price_captured": update_data.get("precio_oro_real")})
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
