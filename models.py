@@ -256,7 +256,7 @@ def get_dashboard_stats():
     pending = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='nuevo'").fetchone()["c"]
     notified = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='notificado'").fetchone()["c"]
     in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='en_taller'").fetchone()["c"]
-    revenue = conn.execute("SELECT COALESCE(SUM(pvp),0) as s FROM orders").fetchone()["s"]
+    revenue = conn.execute("SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders").fetchone()["s"]
 
     # Joyas vs Joyeros vs Cadenas counts
     joyas_count = conn.execute(
@@ -274,7 +274,7 @@ def get_dashboard_stats():
     # Orders without payment_group: each is 1 ticket
     # Exclude joyeros from ticket calculations
     grouped_tickets = conn.execute("""
-        SELECT SUM(pvp) as ticket_pvp
+        SELECT SUM(pvp / 1.21) as ticket_pvp
         FROM orders
         WHERE payment_group IS NOT NULL AND payment_group != ''
           AND COALESCE(product_type,'joya') = 'joya'
