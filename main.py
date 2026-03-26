@@ -182,12 +182,15 @@ def sync_orders():
     try:
         count = sync_from_api(full=True)
         return JSONResponse({"ok": True, "count": count, "source": "shopify_api"})
-    except Exception:
+    except Exception as api_err:
+        import traceback
+        err_detail = traceback.format_exc()
+        print(f"API sync failed: {err_detail}")
         try:
             count = sync_from_csv()
-            return JSONResponse({"ok": True, "count": count, "source": "csv"})
+            return JSONResponse({"ok": True, "count": count, "source": "csv", "api_error": str(api_err)})
         except Exception as e:
-            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+            return JSONResponse({"ok": False, "error": str(e), "api_error": str(api_err)}, status_code=500)
 
 
 @app.put("/api/orders/{order_id}")
