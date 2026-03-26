@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antiqua | Acceso</title>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#212121',
+                        secondary: '#626262',
+                        taupe: '#918a77',
+                        bronze: '#ab8c52',
+                        line: '#e5e2dc',
+                        bg: '#fbfbfb',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-bg min-h-screen flex items-center justify-center" style="font-family: 'Figtree', sans-serif;">
+    <div class="w-full max-w-sm">
+        <div class="text-center mb-10">
+            <h1 class="text-3xl tracking-[0.2em] text-dark" style="font-family: 'Libre Baskerville', serif;">ANTIQUA</h1>
+            <p class="text-sm text-secondary mt-2 tracking-wide">Panel de Pedidos</p>
+        </div>
+
+        <form method="POST" action="/login" class="bg-white border border-line p-8">
+            {% if error %}
+            <div class="mb-4 text-sm text-red-600 text-center">{{ error }}</div>
+            {% endif %}
+
+            <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-2">Contraseña</label>
+            <input type="password" name="password" autofocus
+                   class="w-full border border-line px-4 py-3 text-sm text-dark bg-white placeholder-secondary/40 focus:outline-none focus:border-taupe mb-6"
+                   style="border-radius: 0;"
+                   placeholder="Introduce la contraseña">
+
+            <button type="submit"
+                    class="w-full py-3 bg-dark text-white text-xs uppercase tracking-widest font-semibold hover:bg-secondary transition-colors"
+                    style="border-radius: 0;">
+                Acceder
+            </button>
+        </form>
+
+        <p class="text-center text-xs text-secondary/50 mt-6">MIMA - Asistente de Antiqua</p>
+    </div>
+</body>
+</html>

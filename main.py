@@ -1,16 +1,17 @@
-import os
+import os, secrets
 from datetime import datetime
 
 from dotenv import load_dotenv
 load_dotenv()
 
 import uvicorn
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from jinja2 import Environment, FileSystemLoader
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
 from models import (
     init_db, get_db, get_order, get_all_orders, update_order,
@@ -34,6 +35,10 @@ DEFAULT_GOLD_PRICE = float(os.getenv("GOLD_PRICE_PER_GRAM", 92.0))
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Antiqua - Gestión de Pedidos")
 
+SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32))
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
+
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -48,6 +53,38 @@ if os.path.isdir(STATIC_DIR):
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+
+def require_auth(request: Request):
+    """Check if user is authenticated via session."""
+    if not DASHBOARD_PASSWORD:
+        return  # No password configured, allow access
+    if request.session.get("authenticated"):
+        return
+    from fastapi.responses import RedirectResponse
+    raise HTTPException(status_code=303, detail="Not authenticated")
+
+
+@app.exception_handler(HTTPException)
+async def auth_redirect(request: Request, exc: HTTPException):
+    if exc.status_code == 303:
+        return RedirectResponse("/login", status_code=302)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.get("/login")
+def login_page(request: Request, error: str = None):
+    return templates.TemplateResponse("login.html", {"request": request, "error": error})
+
+
+@app.post("/login")
+async def login_submit(request: Request):
+    form = await request.form()
+    password = form.get("password", "")
+    if password == DASHBOARD_PASSWORD:
+        request.session["authenticated"] = True
+        return RedirectResponse("/", status_code=302)
+    return templates.TemplateResponse("login.html", {"request": request, "error": "Contraseña incorrecta"})
 
 # ---------------------------------------------------------------------------
 # Startup
@@ -84,7 +121,7 @@ def on_startup():
 # ---------------------------------------------------------------------------
 # HTML Pages
 # ---------------------------------------------------------------------------
-@app.get("/")
+@app.get("/", dependencies=[Depends(require_auth)])
 def dashboard(request: Request, status: str = None, month: str = None, search: str = None):
     try:
         filters = {}
@@ -120,7 +157,7 @@ def dashboard(request: Request, status: str = None, month: str = None, search: s
         })
 
 
-@app.get("/order/{order_id}")
+@app.get("/order/{order_id}", dependencies=[Depends(require_auth)])
 def order_detail(request: Request, order_id: str):
     try:
         order = get_order(order_id)
@@ -144,7 +181,7 @@ def order_detail(request: Request, order_id: str):
         })
 
 
-@app.get("/products")
+@app.get("/products", dependencies=[Depends(require_auth)])
 def products_page(request: Request):
     try:
         products = get_all_products()
@@ -158,7 +195,7 @@ def products_page(request: Request):
         })
 
 
-@app.get("/suppliers")
+@app.get("/suppliers", dependencies=[Depends(require_auth)])
 def suppliers_page(request: Request):
     try:
         lola_summary = get_supplier_summary("lola")
