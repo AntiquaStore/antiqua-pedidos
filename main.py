@@ -55,21 +55,22 @@ TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templa
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
+class AuthRedirect(Exception):
+    pass
+
+
+@app.exception_handler(AuthRedirect)
+async def auth_redirect_handler(request: Request, exc: AuthRedirect):
+    return RedirectResponse("/login", status_code=302)
+
+
 def require_auth(request: Request):
     """Check if user is authenticated via session."""
     if not DASHBOARD_PASSWORD:
-        return  # No password configured, allow access
+        return
     if request.session.get("authenticated"):
         return
-    from fastapi.responses import RedirectResponse
-    raise HTTPException(status_code=303, detail="Not authenticated")
-
-
-@app.exception_handler(HTTPException)
-async def auth_redirect(request: Request, exc: HTTPException):
-    if exc.status_code == 303:
-        return RedirectResponse("/login", status_code=302)
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    raise AuthRedirect()
 
 
 @app.get("/login")
