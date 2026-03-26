@@ -54,7 +54,7 @@ Tenemos un nuevo pedido:
 ¿Puedes confirmar disponibilidad y plazo?
 
 Gracias,
-Maria - Antiqua"""
+MIMA - Asistente de Antiqua"""
     return subject, body
 
 
@@ -77,7 +77,7 @@ Nuevo pedido para el taller:
 ¿Plazo estimado de entrega?
 
 Gracias,
-Maria - Antiqua"""
+MIMA - Asistente de Antiqua"""
     return subject, body
 
 
