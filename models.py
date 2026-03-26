@@ -175,7 +175,39 @@ def get_all_orders(status=None, month=None, search=None):
     sql += " ORDER BY fecha_pedido DESC"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    return rows_to_list(rows)
+    return merge_partial_payments(rows_to_list(rows))
+
+
+def merge_partial_payments(orders: list) -> list:
+    """Merge split payment orders into single rows.
+    Orders with the same payment_group get combined into one entry."""
+    groups = {}
+    merged = []
+    for o in orders:
+        pg = o.get("payment_group", "")
+        if pg:
+            if pg not in groups:
+                groups[pg] = {**o}
+                # Clean up the product name (remove "first/second payment" etc)
+                from shopify_client import clean_payment_name
+                raw = o.get("product_name", "")
+                groups[pg]["product_name"] = clean_payment_name(raw) or raw
+                groups[pg]["_merged_orders"] = [o.get("shopify_order_number", "")]
+                groups[pg]["_payment_count"] = 1
+                merged.append(groups[pg])
+            else:
+                # Merge: sum PVP, combine order numbers
+                groups[pg]["pvp"] = (groups[pg].get("pvp", 0) or 0) + (o.get("pvp", 0) or 0)
+                groups[pg]["_merged_orders"].append(o.get("shopify_order_number", ""))
+                groups[pg]["_payment_count"] = groups[pg].get("_payment_count", 1) + 1
+                # Use earliest date
+                if o.get("fecha_pedido", "") < groups[pg].get("fecha_pedido", ""):
+                    groups[pg]["fecha_pedido"] = o["fecha_pedido"]
+                # Combine order numbers for display
+                groups[pg]["shopify_order_number"] = "/".join(groups[pg]["_merged_orders"])
+        else:
+            merged.append(o)
+    return merged
 
 
 def update_order(order_id: int, data: dict):
@@ -258,10 +290,14 @@ def get_dashboard_stats():
     in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='en_taller'").fetchone()["c"]
     revenue = conn.execute("SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders").fetchone()["s"]
 
-    # Joyas vs Joyeros vs Cadenas counts
-    joyas_count = conn.execute(
-        "SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya'"
+    # Joyas vs Joyeros vs Cadenas counts (partial payments grouped = 1 joya)
+    joyas_grouped = conn.execute(
+        "SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND payment_group IS NOT NULL AND payment_group != ''"
     ).fetchone()["c"]
+    joyas_ungrouped = conn.execute(
+        "SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND (payment_group IS NULL OR payment_group = '')"
+    ).fetchone()["c"]
+    joyas_count = joyas_grouped + joyas_ungrouped
     joyeros_count = conn.execute(
         "SELECT COUNT(*) as c FROM orders WHERE product_type = 'joyero'"
     ).fetchone()["c"]

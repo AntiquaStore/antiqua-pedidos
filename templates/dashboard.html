@@ -253,13 +253,12 @@
                         <td class="px-5 py-4">
                             <div class="text-sm font-medium text-dark">
                                 {{ order.product_name or '-' }}
-                                {% if order.is_partial_payment == '1' or order.is_partial_payment == 1 %}
-                                <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-amber-100 text-amber-700 border border-amber-200">⚡ Pago parcial</span>
+                                {% if order._payment_count is defined and order._payment_count > 1 %}
+                                <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-amber-100 text-amber-700 border border-amber-200">{{ order._payment_count }} pagos</span>
+                                {% elif order.is_partial_payment == '1' or order.is_partial_payment == 1 %}
+                                <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-amber-100 text-amber-700 border border-amber-200">Pago parcial</span>
                                 {% endif %}
                             </div>
-                            {% if order.payment_group %}
-                            <p class="text-xs text-secondary/60 mt-0.5">Grupo: {{ order.payment_group.split('|')[0] }}</p>
-                            {% endif %}
                         </td>
                         <td class="px-5 py-4 text-sm text-secondary">{{ order.ring_size or '-' }}</td>
                         <td class="px-5 py-4 text-sm text-dark">{{ order.customer_name or '-' }}</td>
