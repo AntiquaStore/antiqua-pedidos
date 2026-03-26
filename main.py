@@ -61,9 +61,21 @@ def on_startup():
         print(f"Catalog not loaded (OK for cloud deploy): {e}")
     try:
         gold_info = get_gold_info()
-        print(f"Gold price at startup: 24k={gold_info['price_24k_gram']} €/g, 18k={gold_info['price_18k_gram']} €/g (source: {gold_info['source']})")
+        print(f"Gold price at startup: 24k={gold_info['price_24k_gram']} EUR/g (source: {gold_info['source']})")
     except Exception as e:
         print(f"Could not fetch gold price at startup: {e}")
+    # Auto-import orders from bundled CSV if DB is empty
+    try:
+        stats = get_dashboard_stats()
+        if stats.get("total", 0) == 0:
+            csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "orders_export.csv")
+            if os.path.exists(csv_path):
+                n = sync_from_csv(csv_path)
+                print(f"Auto-imported {n} orders from bundled CSV")
+            else:
+                print("No bundled CSV found, DB is empty")
+    except Exception as e:
+        print(f"Auto-import failed: {e}")
 
 # ---------------------------------------------------------------------------
 # HTML Pages

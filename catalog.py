@@ -9,10 +9,12 @@ import models
 
 load_dotenv()
 
-CATALOG_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    os.getenv("CATALOG_EXCEL", "../Negocio/JOYAS - ANTIQUA 2026 - CORREGIDO.xlsx")
-)
+_base = os.path.dirname(os.path.abspath(__file__))
+_env_path = os.getenv("CATALOG_EXCEL", "../Negocio/JOYAS - ANTIQUA 2026 - CORREGIDO.xlsx")
+CATALOG_PATH = os.path.join(_base, _env_path)
+# Fallback: bundled catalog in data/ folder (for cloud deploy)
+if not os.path.exists(os.path.abspath(CATALOG_PATH)):
+    CATALOG_PATH = os.path.join(_base, "data", "catalog.xlsx")
 
 
 def safe_float(val, default=0.0):
