@@ -13,19 +13,43 @@ load_dotenv()
 
 # Supplier info
 SUPPLIERS = {
-    "lola": {
-        "name": "Lola",
-        "company": "MAS GEMAS",
-        "email": "info@masgemasyjoyas.es",
-        "phone": "34666588527",
-        "role": "piedras de color",
-    },
     "barto": {
         "name": "Barto",
         "company": "NOVAO MB18 SL",
         "email": "novaomb18@gmail.com",
         "phone": "34659319904",
+        "address": "Calle Mayor 4, 2 planta puerta 9, 28013 Madrid",
+        "cif": "B8051230",
         "role": "taller y diamantes",
+        "notify": True,
+    },
+    "lola": {
+        "name": "Lola",
+        "company": "MAS GEMAS",
+        "email": "info@masgemasyjoyas.es",
+        "phone": "34666588527",
+        "address": "C/ Rodriguez San Pedro 2, planta 11, 28015 Madrid",
+        "cif": "B87653911",
+        "role": "piedras de color",
+        "notify": True,
+    },
+    "jotaeme": {
+        "name": "Jotaeme",
+        "company": "LOTO INDUSTRIAS JOTAEME S.A.",
+        "email": "jotaeme@jotaeme.net",
+        "phone": "34677501042",
+        "address": "C/ Igarsa, nave M, 28860 Paracuellos de Jarama (Madrid)",
+        "role": "proveedor de oro (inversion)",
+        "notify": False,
+    },
+    "negueruela": {
+        "name": "Negueruela",
+        "company": "ANTONIO NEGUERUELA, S.A.",
+        "email": "",
+        "phone": "34914462227",
+        "address": "",
+        "role": "piedras de color (alternativo)",
+        "notify": False,
     },
 }
 
