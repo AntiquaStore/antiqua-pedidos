@@ -45,6 +45,53 @@ def get_access_token():
     return None
 
 
+def classify_product_type(product_name: str) -> str:
+    """Classify product as 'joya' or 'joyero' (Relique Box)."""
+    lower = product_name.lower()
+    if "relique" in lower or "box" in lower:
+        return "joyero"
+    return "joya"
+
+
+# ── Partial payment detection ──
+_PARTIAL_PATTERNS = [
+    r"first\s*payment", r"second\s*payment",
+    r"primer\s*pago", r"segundo\s*pago",
+    r"pago\s*1\b", r"pago\s*2\b",
+    r"1er\s*pago", r"2do\s*pago", r"2º\s*pago",
+]
+_PARTIAL_RE = re.compile("|".join(_PARTIAL_PATTERNS), re.IGNORECASE)
+
+
+def is_partial_payment(item_name: str) -> bool:
+    """Returns True if the item name indicates a split/partial payment."""
+    return bool(_PARTIAL_RE.search(item_name))
+
+
+_CLEAN_PATTERNS = [
+    r"\s*-?\s*first\s*payment",
+    r"\s*-?\s*second\s*payment",
+    r"\s*-?\s*primer\s*pago",
+    r"\s*-?\s*segundo\s*pago",
+    r"\s*-?\s*pago\s*1\b",
+    r"\s*-?\s*pago\s*2\b",
+    r"\s*-?\s*1er\s*pago",
+    r"\s*-?\s*2do\s*pago",
+    r"\s*-?\s*2º\s*pago",
+]
+_CLEAN_RE = re.compile("|".join(_CLEAN_PATTERNS), re.IGNORECASE)
+
+
+def clean_payment_name(item_name: str) -> str:
+    """Strip payment indicators and normalize the product name."""
+    cleaned = _CLEAN_RE.sub("", item_name)
+    # Normalize dashes and spaces
+    cleaned = re.sub(r'\s*-\s*$', '', cleaned)  # trailing dash
+    cleaned = re.sub(r'^\s*-\s*', '', cleaned)  # leading dash
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
+
 def parse_line_item(name: str):
     """
     Parse Shopify line item name into product, size, variant.
@@ -111,7 +158,8 @@ def sync_from_api():
 
     for order in orders:
         for item in order.get("line_items", []):
-            product_name, ring_size, variant = parse_line_item(item.get("name", ""))
+            raw_item_name = item.get("name", "")
+            product_name, ring_size, variant = parse_line_item(raw_item_name)
             pvp = float(item.get("price", 0)) * int(item.get("quantity", 1))
 
             # Get cost estimates from catalog
@@ -121,18 +169,32 @@ def sync_from_api():
             shipping = order.get("shipping_address") or {}
             addr = shipping or billing
 
+            # Classify product type
+            product_type = classify_product_type(product_name)
+
+            # Detect partial payments
+            partial = is_partial_payment(raw_item_name)
+            customer_name = billing.get("name", "")
+            payment_group = ""
+            if partial:
+                cleaned = clean_payment_name(raw_item_name)
+                payment_group = f"{cleaned}|{customer_name}".lower().strip()
+
             data = {
                 "shopify_order_id": str(order["id"]),
                 "shopify_order_number": order.get("name", ""),
-                "customer_name": billing.get("name", ""),
+                "customer_name": customer_name,
                 "customer_email": order.get("email", ""),
                 "customer_phone": billing.get("phone", ""),
                 "customer_address": f"{addr.get('address1', '')}, {addr.get('city', '')} {addr.get('zip', '')}",
                 "product_name": product_name,
+                "product_type": product_type,
                 "ring_size": ring_size,
                 "variant": variant,
                 "fecha_pedido": order.get("created_at", "")[:10],
                 "pvp": pvp,
+                "is_partial_payment": "1" if partial else "0",
+                "payment_group": payment_group if partial else "",
                 "status": "completado" if order.get("created_at", "")[:10] < date.today().isoformat() else "nuevo",
                 **estimates,
             }
@@ -166,11 +228,11 @@ def sync_from_csv(csv_path: str = None):
     with open(csv_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            item_name = row.get("Lineitem name", "")
-            if not item_name:
+            raw_item_name = row.get("Lineitem name", "")
+            if not raw_item_name:
                 continue
 
-            product_name, ring_size, variant = parse_line_item(item_name)
+            product_name, ring_size, variant = parse_line_item(raw_item_name)
             pvp = float(row.get("Lineitem price", 0) or 0)
 
             estimates = catalog.estimate_costs(product_name, pvp, gold_price) or {}
@@ -178,18 +240,32 @@ def sync_from_csv(csv_path: str = None):
             created = row.get("Created at", "")
             fecha = created[:10] if created else ""
 
+            # Classify product type
+            product_type = classify_product_type(product_name)
+
+            # Detect partial payments
+            partial = is_partial_payment(raw_item_name)
+            customer_name = row.get("Billing Name", "")
+            payment_group = ""
+            if partial:
+                cleaned = clean_payment_name(raw_item_name)
+                payment_group = f"{cleaned}|{customer_name}".lower().strip()
+
             data = {
                 "shopify_order_id": row.get("Id", row.get("Name", "")),
                 "shopify_order_number": row.get("Name", ""),
-                "customer_name": row.get("Billing Name", ""),
+                "customer_name": customer_name,
                 "customer_email": row.get("Email", ""),
                 "customer_phone": row.get("Billing Phone", row.get("Phone", "")),
                 "customer_address": f"{row.get('Shipping Address1', '')}, {row.get('Shipping City', '')} {row.get('Shipping Zip', '')}",
                 "product_name": product_name,
+                "product_type": product_type,
                 "ring_size": ring_size,
                 "variant": variant,
                 "fecha_pedido": fecha,
                 "pvp": pvp,
+                "is_partial_payment": "1" if partial else "0",
+                "payment_group": payment_group if partial else "",
                 "status": "completado" if fecha < date.today().isoformat() else "nuevo",
                 **estimates,
             }

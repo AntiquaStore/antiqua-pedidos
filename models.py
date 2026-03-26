@@ -101,6 +101,16 @@ def init_db():
         value TEXT
     );
     """)
+    # Add new columns if they don't exist (migration for existing DBs)
+    for col, coltype in [
+        ("is_partial_payment", "TEXT DEFAULT '0'"),
+        ("payment_group", "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE orders ADD COLUMN {col} {coltype}")
+        except Exception:
+            pass  # Column already exists
+
     conn.commit()
     conn.close()
 
@@ -245,7 +255,47 @@ def get_dashboard_stats():
     notified = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='notificado'").fetchone()["c"]
     in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='en_taller'").fetchone()["c"]
     revenue = conn.execute("SELECT COALESCE(SUM(pvp),0) as s FROM orders").fetchone()["s"]
-    avg_ticket = conn.execute("SELECT COALESCE(AVG(pvp),0) as a FROM orders WHERE pvp > 0").fetchone()["a"]
+
+    # Joyas vs Joyeros counts
+    joyas_count = conn.execute(
+        "SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') != 'joyero'"
+    ).fetchone()["c"]
+    joyeros_count = conn.execute(
+        "SELECT COUNT(*) as c FROM orders WHERE product_type = 'joyero'"
+    ).fetchone()["c"]
+
+    # Unique tickets & avg ticket (joyas only, merging split payments)
+    # Orders with payment_group: group them (sum pvp, count as 1 ticket)
+    # Orders without payment_group: each is 1 ticket
+    # Exclude joyeros from ticket calculations
+    grouped_tickets = conn.execute("""
+        SELECT SUM(pvp) as ticket_pvp
+        FROM orders
+        WHERE payment_group IS NOT NULL AND payment_group != ''
+          AND COALESCE(product_type,'joya') != 'joyero'
+        GROUP BY payment_group
+    """).fetchall()
+
+    ungrouped_tickets = conn.execute("""
+        SELECT pvp as ticket_pvp
+        FROM orders
+        WHERE (payment_group IS NULL OR payment_group = '')
+          AND COALESCE(product_type,'joya') != 'joyero'
+          AND pvp > 0
+    """).fetchall()
+
+    all_tickets = [row["ticket_pvp"] for row in grouped_tickets if row["ticket_pvp"]] + \
+                  [row["ticket_pvp"] for row in ungrouped_tickets if row["ticket_pvp"]]
+
+    unique_tickets = len(all_tickets)
+    total_joyas_revenue = sum(all_tickets) if all_tickets else 0
+    avg_ticket_joyas = total_joyas_revenue / unique_tickets if unique_tickets > 0 else 0
+
+    # Legacy avg_ticket (simple average of all orders with pvp > 0)
+    avg_ticket = conn.execute(
+        "SELECT COALESCE(AVG(pvp),0) as a FROM orders WHERE pvp > 0"
+    ).fetchone()["a"]
+
     conn.close()
     return {
         "total": total,
@@ -254,6 +304,10 @@ def get_dashboard_stats():
         "in_workshop": in_workshop,
         "revenue": revenue,
         "avg_ticket": avg_ticket,
+        "joyas_count": joyas_count,
+        "joyeros_count": joyeros_count,
+        "unique_tickets": unique_tickets,
+        "avg_ticket_joyas": avg_ticket_joyas,
     }
 
 

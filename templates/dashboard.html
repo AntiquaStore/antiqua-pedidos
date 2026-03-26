@@ -58,7 +58,7 @@
 </div>
 
 <!-- KPI Cards -->
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
     <!-- Pendientes -->
     <div class="bg-white border border-line p-6">
         <div class="flex items-start justify-between">
@@ -89,6 +89,36 @@
         </div>
     </div>
 
+    <!-- Joyas vendidas -->
+    <div class="bg-white border border-line p-6">
+        <div class="flex items-start justify-between">
+            <div>
+                <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.joyas_count or 0 }}</p>
+                <p class="text-sm text-secondary mt-1 tracking-wide">Joyas vendidas</p>
+            </div>
+            <div class="w-10 h-10 flex items-center justify-center bg-bronze/10">
+                <svg class="w-5 h-5 text-bronze" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="square" stroke-width="1.5" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Joyeros vendidos -->
+    <div class="bg-white border border-line p-6">
+        <div class="flex items-start justify-between">
+            <div>
+                <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.joyeros_count or 0 }}</p>
+                <p class="text-sm text-secondary mt-1 tracking-wide">Joyeros vendidos</p>
+            </div>
+            <div class="w-10 h-10 flex items-center justify-center bg-taupe/10">
+                <svg class="w-5 h-5 text-taupe" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="square" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
     <!-- Facturacion -->
     <div class="bg-white border border-line p-6">
         <div class="flex items-start justify-between">
@@ -104,12 +134,12 @@
         </div>
     </div>
 
-    <!-- Ticket medio -->
+    <!-- Ticket medio (joyas) -->
     <div class="bg-white border border-line p-6">
         <div class="flex items-start justify-between">
             <div>
-                <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.avg_ticket or 0)|replace(",", ".") }} €</p>
-                <p class="text-sm text-secondary mt-1 tracking-wide">Ticket medio</p>
+                <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.avg_ticket_joyas or 0)|replace(",", ".") }} €</p>
+                <p class="text-sm text-secondary mt-1 tracking-wide">Ticket medio (joyas)</p>
             </div>
             <div class="w-10 h-10 flex items-center justify-center bg-dark/5">
                 <svg class="w-5 h-5 text-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -190,7 +220,17 @@
                     {% for order in orders %}
                     <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
                         <td class="px-5 py-4 text-sm text-secondary">{{ order.shopify_order_number or order.id }}</td>
-                        <td class="px-5 py-4 text-sm font-medium text-dark">{{ order.product_name or '-' }}</td>
+                        <td class="px-5 py-4">
+                            <div class="text-sm font-medium text-dark">
+                                {{ order.product_name or '-' }}
+                                {% if order.is_partial_payment == '1' or order.is_partial_payment == 1 %}
+                                <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-amber-100 text-amber-700 border border-amber-200">⚡ Pago parcial</span>
+                                {% endif %}
+                            </div>
+                            {% if order.payment_group %}
+                            <p class="text-xs text-secondary/60 mt-0.5">Grupo: {{ order.payment_group.split('|')[0] }}</p>
+                            {% endif %}
+                        </td>
                         <td class="px-5 py-4 text-sm text-secondary">{{ order.ring_size or '-' }}</td>
                         <td class="px-5 py-4 text-sm text-dark">{{ order.customer_name or '-' }}</td>
                         <td class="px-5 py-4 text-sm text-secondary">{{ order.fecha_pedido[:10] if order.fecha_pedido else '-' }}</td>
