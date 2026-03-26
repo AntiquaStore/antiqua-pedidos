@@ -121,16 +121,18 @@ def parse_line_item(name: str):
     return name, None, None
 
 
-def fetch_orders_api(since_id=None, limit=250):
-    """Fetch orders from Shopify REST API."""
+def fetch_orders_api(since_id=None, limit=250, year=2026):
+    """Fetch orders from Shopify REST API. Paginates to get ALL orders for the given year."""
     token = get_access_token()
     if not token:
         return []
 
+    all_orders = []
     url = f"https://{STORE}/admin/api/{API_VERSION}/orders.json"
     params = {
         "limit": limit,
         "status": "any",
+        "created_at_min": f"{year}-01-01T00:00:00Z",
         "fields": "id,name,email,created_at,financial_status,fulfillment_status,"
                   "total_price,subtotal_price,total_tax,line_items,billing_address,"
                   "shipping_address,note,tags,payment_gateway_names",
@@ -139,19 +141,43 @@ def fetch_orders_api(since_id=None, limit=250):
         params["since_id"] = since_id
 
     headers = {"X-Shopify-Access-Token": token}
-    resp = requests.get(url, headers=headers, params=params)
 
-    if resp.status_code == 200:
-        return resp.json().get("orders", [])
+    # Paginate through all results
+    while url:
+        resp = requests.get(url, headers=headers, params=params)
+        if resp.status_code != 200:
+            print(f"Shopify API error: {resp.status_code} {resp.text[:200]}")
+            break
+
+        orders = resp.json().get("orders", [])
+        all_orders.extend(orders)
+
+        # Check for next page via Link header
+        link_header = resp.headers.get("Link", "")
+        if 'rel="next"' in link_header:
+            # Extract next URL
+            for part in link_header.split(","):
+                if 'rel="next"' in part:
+                    url = part.split("<")[1].split(">")[0]
+                    params = {}  # URL already contains params
+                    break
+        else:
+            break
+
+    print(f"Fetched {len(all_orders)} orders from Shopify API (year {year})")
+    return all_orders
+
+
+def sync_from_api(full=False):
+    """Pull orders from Shopify API and create/update in DB.
+    full=True: fetch ALL 2026 orders (ignore since_id). Used for initial load.
+    full=False: fetch only new orders since last sync.
+    """
+    if full:
+        orders = fetch_orders_api(since_id=None)
     else:
-        print(f"Shopify API error: {resp.status_code} {resp.text[:200]}")
-        return []
-
-
-def sync_from_api():
-    """Pull new orders from Shopify API and create/update in DB."""
-    last_id = models.get_setting("last_shopify_id", "0")
-    orders = fetch_orders_api(since_id=last_id)
+        last_id = models.get_setting("last_shopify_id", "0")
+        orders = fetch_orders_api(since_id=last_id if last_id != "0" else None)
 
     gold_price = float(models.get_setting("gold_price", os.getenv("GOLD_PRICE_PER_GRAM", "92.0")))
     count = 0

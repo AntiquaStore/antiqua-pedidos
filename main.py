@@ -64,16 +64,20 @@ def on_startup():
         print(f"Gold price at startup: 24k={gold_info['price_24k_gram']} EUR/g (source: {gold_info['source']})")
     except Exception as e:
         print(f"Could not fetch gold price at startup: {e}")
-    # Auto-import orders from bundled CSV if DB is empty
+    # Auto-sync orders from Shopify API on startup (Shopify = single source of truth)
     try:
         stats = get_dashboard_stats()
         if stats.get("total", 0) == 0:
-            csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "orders_export.csv")
-            if os.path.exists(csv_path):
-                n = sync_from_csv(csv_path)
-                print(f"Auto-imported {n} orders from bundled CSV")
+            # DB is empty — full sync from Shopify API
+            n = sync_from_api(full=True)
+            if n > 0:
+                print(f"Auto-synced {n} orders from Shopify API")
             else:
-                print("No bundled CSV found, DB is empty")
+                # Fallback to CSV if API fails
+                csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "orders_export.csv")
+                if os.path.exists(csv_path):
+                    n = sync_from_csv(csv_path)
+                    print(f"Fallback: imported {n} orders from CSV")
     except Exception as e:
         print(f"Auto-import failed: {e}")
 
@@ -176,8 +180,8 @@ def suppliers_page(request: Request):
 @app.post("/api/sync")
 def sync_orders():
     try:
-        count = sync_from_api()
-        return JSONResponse({"ok": True, "count": count})
+        count = sync_from_api(full=True)
+        return JSONResponse({"ok": True, "count": count, "source": "shopify_api"})
     except Exception:
         try:
             count = sync_from_csv()
