@@ -122,6 +122,7 @@ def estimate_costs(product_name: str, pvp: float = None, gold_price: float = Non
         "cmv_estimado": round(cmv_est, 2),
         "beneficio_bruto_estimado": round(beneficio_est, 2),
         "piedras_desc": product.get("piedras_desc", ""),
+        "diamantes_desc": product.get("diamantes_desc", ""),
     }
 
 

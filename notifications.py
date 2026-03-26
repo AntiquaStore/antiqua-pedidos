@@ -99,9 +99,23 @@ def email_template_barto(order: dict) -> tuple:
     size = order.get("ring_size", "")
     size_txt = f" talla {size}" if size else ""
     fecha = fecha_limite_entrega()
+    peso = order.get("peso_estimado", 0)
+    barto_est = order.get("barto_estimado", 0)
+    diamantes = order.get("diamantes_desc", "")
 
     subject = f"Nuevo pedido - Sortija {piece}"
-    body = f"Nuevo pedido - Sortija {piece}{size_txt} - fecha de entrega limite al cliente {fecha}\n\nMIMA - Asistente de Antiqua"
+    lines = [f"Nuevo pedido - Sortija {piece}{size_txt}"]
+    if peso:
+        lines.append(f"Peso aproximado: {peso:.1f} gr")
+    if diamantes and diamantes != "-":
+        lines.append(f"Diamantes: {diamantes}")
+    if barto_est:
+        lines.append(f"Coste taller estimado: {barto_est:.0f} EUR")
+    lines.append(f"Fecha de entrega limite al cliente: {fecha}")
+    lines.append("")
+    lines.append("MIMA - Asistente de Antiqua")
+
+    body = "\n".join(lines)
     return subject, body
 
 
@@ -116,12 +130,24 @@ def whatsapp_template_lola(order: dict) -> str:
 
 
 def whatsapp_template_barto(order: dict) -> str:
-    """Short WhatsApp message for Barto."""
+    """WhatsApp message for Barto with full details."""
     piece = order.get("product_name", "Pieza")
     size = order.get("ring_size", "")
     size_txt = f" talla {size}" if size else ""
     fecha = fecha_limite_entrega()
-    return f"Nuevo pedido - Sortija {piece}{size_txt} - fecha de entrega limite al cliente {fecha}"
+    peso = order.get("peso_estimado", 0)
+    barto_est = order.get("barto_estimado", 0)
+    diamantes = order.get("diamantes_desc", "")
+
+    lines = [f"Nuevo pedido - Sortija {piece}{size_txt}"]
+    if peso:
+        lines.append(f"Peso aprox: {peso:.1f} gr")
+    if diamantes and diamantes != "-":
+        lines.append(f"Diamantes: {diamantes}")
+    if barto_est:
+        lines.append(f"Coste taller estimado: {barto_est:.0f} EUR")
+    lines.append(f"Entrega limite: {fecha}")
+    return "\n".join(lines)
 
 
 def generate_whatsapp_link(supplier: str, order: dict) -> str:

@@ -106,6 +106,7 @@ def init_db():
         ("is_partial_payment", "TEXT DEFAULT '0'"),
         ("payment_group", "TEXT"),
         ("piedras_desc", "TEXT"),
+        ("diamantes_desc", "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE orders ADD COLUMN {col} {coltype}")
