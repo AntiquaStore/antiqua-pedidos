@@ -45,16 +45,15 @@ def get_access_token():
     return None
 
 
-CHAIN_NAMES = {"forza", "rolo", "gilbert root", "chloe root", "chloé root", "maggie root", "3x1"}
+CHAIN_NAMES = {"forza", "rolo", "3x1"}  # Basic factory chains only
 
 def classify_product_type(product_name: str) -> str:
-    """Classify product as 'joya', 'joyero' (Relique Box), or 'cadena'."""
+    """Classify product as 'joya', 'joyero' (Relique Box), or 'cadena' (basic chains)."""
     lower = product_name.lower().strip()
     if "relique" in lower or "box" in lower:
         return "joyero"
-    # Check if the base name (before dash/size) matches a chain
     base = re.split(r'\s*-\s*', lower)[0].strip()
-    if base in CHAIN_NAMES or "cadena" in lower or "chain" in lower:
+    if base in CHAIN_NAMES:
         return "cadena"
     return "joya"
 
