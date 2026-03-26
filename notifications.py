@@ -67,9 +67,9 @@ def email_template_lola(order: dict) -> tuple:
 
     subject = f"Pedido Antiqua - {piece}"
     if piedras_desc:
-        body = f"Hola Lola, necesitamos {piedras_desc} para la sortija {piece} porfa. Se las dejas a Barto?\n\nGracias,\nMIMA - Asistente de Antiqua"
+        body = f"Hola Lola, necesitamos {piedras_desc} para la sortija {piece} porfa. Se las dejas a Barto?\n\nGracias,\nMima - Asistente de Antiqua"
     else:
-        body = f"Hola Lola, necesitamos las piedras de color para la sortija {piece} porfa. Se las dejas a Barto?\n\nGracias,\nMIMA - Asistente de Antiqua"
+        body = f"Hola Lola, necesitamos las piedras de color para la sortija {piece} porfa. Se las dejas a Barto?\n\nGracias,\nMima - Asistente de Antiqua"
     return subject, body
 
 
@@ -84,36 +84,52 @@ def add_business_days(start: date, days: int) -> date:
     return current
 
 
+MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+         "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+def fecha_es(fecha_iso: str) -> str:
+    """Convert '2026-03-26' to '26/03/2026'."""
+    if not fecha_iso or len(fecha_iso) < 10:
+        return fecha_iso
+    try:
+        d = date.fromisoformat(fecha_iso[:10])
+        return f"{d.day:02d}/{d.month:02d}/{d.year}"
+    except ValueError:
+        return fecha_iso
+
+
 def fecha_limite_entrega() -> str:
     """Calculate delivery deadline: 18 business days from today."""
     deadline = add_business_days(date.today(), 18)
-    # Format: "15 de abril"
-    meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
-             "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-    return f"{deadline.day} de {meses[deadline.month - 1]}"
+    return f"{deadline.day} de {MESES[deadline.month - 1]}"
 
 
 def email_template_barto(order: dict) -> tuple:
     """Returns (subject, body) for Barto notification."""
     piece = order.get("product_name", "Pieza")
     size = order.get("ring_size", "")
-    size_txt = f" talla {size}" if size else ""
+    fecha_pedido = order.get("fecha_pedido", "")
     fecha = fecha_limite_entrega()
     peso = order.get("peso_estimado", 0)
-    barto_est = order.get("barto_estimado", 0)
     diamantes = order.get("diamantes_desc", "")
 
-    subject = f"Nuevo pedido - Sortija {piece}"
-    lines = [f"Nuevo pedido - Sortija {piece}{size_txt}"]
+    subject = f"Nuevo pedido Antiqua - {piece}"
+    lines = [
+        "Hola Barto, podemos poner en marcha:",
+        "",
+        f"Nuevo pedido Antiqua ({fecha_es(fecha_pedido)}):",
+        f"- {piece}",
+    ]
+    if size:
+        lines.append(f"- Talla: {size}")
     if peso:
-        lines.append(f"Peso aproximado: {peso:.1f} gr")
+        lines.append(f"- Gramos aproximados de oro: {peso:.1f} gr")
     if diamantes and diamantes != "-":
-        lines.append(f"Diamantes: {diamantes}")
-    if barto_est:
-        lines.append(f"Coste taller estimado: {barto_est:.0f} EUR")
-    lines.append(f"Fecha de entrega limite al cliente: {fecha}")
+        lines.append(f"- Diamantes: {diamantes}")
+    lines.append(f"- Entrega limite: {fecha}")
     lines.append("")
-    lines.append("MIMA - Asistente de Antiqua")
+    lines.append("Mima - Asistente de Antiqua")
 
     body = "\n".join(lines)
     return subject, body
@@ -133,20 +149,26 @@ def whatsapp_template_barto(order: dict) -> str:
     """WhatsApp message for Barto with full details."""
     piece = order.get("product_name", "Pieza")
     size = order.get("ring_size", "")
-    size_txt = f" talla {size}" if size else ""
+    fecha_pedido = order.get("fecha_pedido", "")
     fecha = fecha_limite_entrega()
     peso = order.get("peso_estimado", 0)
-    barto_est = order.get("barto_estimado", 0)
     diamantes = order.get("diamantes_desc", "")
 
-    lines = [f"Nuevo pedido - Sortija {piece}{size_txt}"]
+    lines = [
+        "Hola Barto, podemos poner en marcha:",
+        "",
+        f"Nuevo pedido Antiqua ({fecha_es(fecha_pedido)}):",
+        f"- {piece}",
+    ]
+    if size:
+        lines.append(f"- Talla: {size}")
     if peso:
-        lines.append(f"Peso aprox: {peso:.1f} gr")
+        lines.append(f"- Gramos aproximados de oro: {peso:.1f} gr")
     if diamantes and diamantes != "-":
-        lines.append(f"Diamantes: {diamantes}")
-    if barto_est:
-        lines.append(f"Coste taller estimado: {barto_est:.0f} EUR")
-    lines.append(f"Entrega limite: {fecha}")
+        lines.append(f"- Diamantes: {diamantes}")
+    lines.append(f"- Entrega limite: {fecha}")
+    lines.append("")
+    lines.append("Mima - Asistente de Antiqua")
     return "\n".join(lines)
 
 
