@@ -3,6 +3,7 @@ Shopify API client for fetching orders.
 Also imports orders from CSV export as fallback.
 """
 import os, re, csv, datetime
+from datetime import date
 import requests
 from dotenv import load_dotenv
 import models, catalog
@@ -132,7 +133,7 @@ def sync_from_api():
                 "variant": variant,
                 "fecha_pedido": order.get("created_at", "")[:10],
                 "pvp": pvp,
-                "status": "nuevo",
+                "status": "completado" if order.get("created_at", "")[:10] < date.today().isoformat() else "nuevo",
                 **estimates,
             }
             models.upsert_order(data)
@@ -189,7 +190,7 @@ def sync_from_csv(csv_path: str = None):
                 "variant": variant,
                 "fecha_pedido": fecha,
                 "pvp": pvp,
-                "status": "nuevo",
+                "status": "completado" if fecha < date.today().isoformat() else "nuevo",
                 **estimates,
             }
             models.upsert_order(data)

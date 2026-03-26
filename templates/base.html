@@ -81,8 +81,8 @@
                 <!-- Gold price (desktop) -->
                 <div class="hidden md:flex items-center">
                     {% if gold_price is defined and gold_price %}
-                    <span class="text-xs text-secondary uppercase tracking-wide mr-2">Oro</span>
-                    <span class="text-sm font-semibold text-bronze">{{ "%.2f"|format(gold_price) }} €/oz</span>
+                    <span class="text-xs text-secondary uppercase tracking-wide mr-2">ORO 18K:</span>
+                    <span class="text-sm font-semibold text-bronze">{{ "%.2f"|format(gold_price.price_18k_gram) }} €/gr</span>
                     {% endif %}
                 </div>
 
@@ -110,8 +110,8 @@
                 <a href="/suppliers" class="block text-sm font-medium text-secondary tracking-wide uppercase">Proveedores</a>
                 {% if gold_price is defined and gold_price %}
                 <div class="pt-3 border-t border-line">
-                    <span class="text-xs text-secondary uppercase tracking-wide mr-2">Oro</span>
-                    <span class="text-sm font-semibold text-bronze">{{ "%.2f"|format(gold_price) }} €/oz</span>
+                    <span class="text-xs text-secondary uppercase tracking-wide mr-2">ORO 18K:</span>
+                    <span class="text-sm font-semibold text-bronze">{{ "%.2f"|format(gold_price.price_18k_gram) }} €/gr</span>
                 </div>
                 {% endif %}
             </div>

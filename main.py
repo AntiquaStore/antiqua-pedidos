@@ -21,6 +21,7 @@ from catalog import load_catalog, estimate_costs
 from shopify_client import sync_from_api, sync_from_csv
 from excel_sync import export_order_to_excel, import_excel_to_db, export_all_to_excel
 from notifications import notify_supplier, get_notification_preview, SUPPLIERS
+from gold_price import get_gold_info, get_18k_gold_price
 
 # ---------------------------------------------------------------------------
 # Config
@@ -58,6 +59,11 @@ def on_startup():
         load_catalog()
     except Exception as e:
         print(f"Catalog not loaded (OK for cloud deploy): {e}")
+    try:
+        gold_info = get_gold_info()
+        print(f"Gold price at startup: 24k={gold_info['price_24k_gram']} €/g, 18k={gold_info['price_18k_gram']} €/g (source: {gold_info['source']})")
+    except Exception as e:
+        print(f"Could not fetch gold price at startup: {e}")
 
 # ---------------------------------------------------------------------------
 # HTML Pages
@@ -76,14 +82,12 @@ def dashboard(request: Request, status: str = None, month: str = None, search: s
         orders = get_all_orders(**filters)
         stats = get_dashboard_stats()
 
-        gold_price = get_setting("gold_price")
-        if gold_price is None:
-            gold_price = DEFAULT_GOLD_PRICE
+        gold_price_info = get_gold_info()
 
         return templates.TemplateResponse(name="dashboard.html", request=request, context={
             "orders": orders,
             "stats": stats,
-            "gold_price": gold_price,
+            "gold_price": gold_price_info,
             "current_status": status or "",
             "current_month": month or "",
             "current_search": search or "",
@@ -92,7 +96,7 @@ def dashboard(request: Request, status: str = None, month: str = None, search: s
         return templates.TemplateResponse(name="dashboard.html", request=request, context={
             "orders": [],
             "stats": {},
-            "gold_price": DEFAULT_GOLD_PRICE,
+            "gold_price": get_gold_info(),
             "current_status": "",
             "current_month": "",
             "current_search": "",
@@ -228,6 +232,14 @@ def export_excel():
         return JSONResponse({"ok": True, "count": count})
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/gold-price")
+def gold_price_endpoint():
+    try:
+        return JSONResponse(get_gold_info())
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.post("/api/settings/gold-price")
