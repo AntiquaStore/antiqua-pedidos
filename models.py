@@ -344,6 +344,21 @@ def get_dashboard_stats():
     # Ticket medio con IVA (joyas only, same logic as avg_ticket_joyas but with IVA)
     avg_ticket_joyas_iva = avg_ticket_joyas * 1.21 if avg_ticket_joyas else 0
 
+    # Ventas del mes actual y del año
+    import datetime as _dt
+    now = _dt.date.today()
+    current_month = now.strftime("%Y-%m")
+    current_year = now.strftime("%Y")
+    ventas_mes = conn.execute(
+        "SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND COALESCE(product_type,'joya') != 'joyero'",
+        (f"{current_month}%",)
+    ).fetchone()["c"]
+    ventas_ano = conn.execute(
+        "SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND COALESCE(product_type,'joya') != 'joyero'",
+        (f"{current_year}%",)
+    ).fetchone()["c"]
+    mes_nombre = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"][now.month - 1]
+
     conn.close()
     return {
         "total": total,
@@ -358,6 +373,9 @@ def get_dashboard_stats():
         "unique_tickets": unique_tickets,
         "avg_ticket_joyas": avg_ticket_joyas,
         "avg_ticket_joyas_iva": avg_ticket_joyas_iva,
+        "ventas_mes": ventas_mes,
+        "ventas_ano": ventas_ano,
+        "mes_nombre": mes_nombre,
     }
 
 

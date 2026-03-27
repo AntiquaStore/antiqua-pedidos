@@ -178,6 +178,36 @@
             </div>
         </div>
     </div>
+
+    <!-- Ventas este mes -->
+    <div class="bg-white border border-line p-6">
+        <div class="flex items-start justify-between">
+            <div>
+                <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.ventas_mes or 0 }}</p>
+                <p class="text-sm text-secondary mt-1 tracking-wide">Ventas en {{ stats.mes_nombre or 'este mes' }}</p>
+            </div>
+            <div class="w-10 h-10 flex items-center justify-center bg-bronze/10">
+                <svg class="w-5 h-5 text-bronze" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="square" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ventas en el año -->
+    <div class="bg-white border border-line p-6">
+        <div class="flex items-start justify-between">
+            <div>
+                <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.ventas_ano or 0 }}</p>
+                <p class="text-sm text-secondary mt-1 tracking-wide">Ventas en 2026</p>
+            </div>
+            <div class="w-10 h-10 flex items-center justify-center bg-taupe/10">
+                <svg class="w-5 h-5 text-taupe" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="square" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Filters -->
