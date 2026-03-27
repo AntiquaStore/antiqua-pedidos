@@ -270,6 +270,19 @@ async def create_test_order(request: Request):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
+@app.delete("/api/orders/test-cleanup")
+def cleanup_test_orders():
+    """Remove all test orders."""
+    try:
+        conn = get_db()
+        conn.execute("DELETE FROM orders WHERE shopify_order_id LIKE 'TEST%'")
+        conn.commit()
+        conn.close()
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 @app.put("/api/orders/{order_id}")
 async def update_order_endpoint(order_id: str, request: Request):
     try:
