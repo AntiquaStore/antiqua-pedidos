@@ -231,6 +231,45 @@ def sync_orders():
             return JSONResponse({"ok": False, "error": str(e), "api_error": str(api_err)}, status_code=500)
 
 
+@app.post("/api/orders/test")
+async def create_test_order(request: Request):
+    """Create a test order for demo purposes."""
+    try:
+        body = await request.json()
+        from datetime import date as d
+        from catalog import estimate_costs
+        product = body.get("product_name", "Aluna")
+        size = body.get("ring_size", "")
+        customer = body.get("customer_name", "Cliente Prueba")
+        pvp = float(body.get("pvp", 0))
+
+        estimates = estimate_costs(product, pvp, 160) or {}
+
+        data = {
+            "shopify_order_id": f"TEST-{int(__import__('time').time())}",
+            "shopify_order_number": "#TEST",
+            "customer_name": customer,
+            "customer_email": body.get("email", ""),
+            "customer_phone": body.get("phone", ""),
+            "customer_address": "",
+            "product_name": product,
+            "product_type": "joya",
+            "ring_size": size,
+            "variant": body.get("variant", ""),
+            "fecha_pedido": d.today().isoformat(),
+            "pvp": pvp,
+            "is_partial_payment": "0",
+            "payment_group": "",
+            "status": "nuevo",
+            **estimates,
+        }
+        from models import upsert_order
+        order_id = upsert_order(data)
+        return JSONResponse({"ok": True, "order_id": order_id, "data": data})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 @app.put("/api/orders/{order_id}")
 async def update_order_endpoint(order_id: str, request: Request):
     try:
