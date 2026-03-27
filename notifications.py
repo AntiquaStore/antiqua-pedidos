@@ -64,12 +64,13 @@ def email_template_lola(order: dict) -> tuple:
     """Returns (subject, body) for Lola notification."""
     piece = order.get("product_name", "Pieza")
     piedras_desc = order.get("piedras_desc", "")
+    order_num = order.get("shopify_order_number", "")
 
-    subject = f"Pedido Antiqua - {piece}"
+    subject = f"Pedido Antiqua {order_num} - {piece}"
     if piedras_desc:
-        body = f"Hola Lola, necesitamos {piedras_desc} para la sortija {piece} porfa. Se las dejas a Barto?\n\nGracias,\nMima - Asistente de Antiqua"
+        body = f"Hola Lola, necesitamos {piedras_desc} para la sortija {piece} (pedido {order_num}) porfa. Se las dejas a Barto?\n\nGracias,\nMima - Asistente de Antiqua"
     else:
-        body = f"Hola Lola, necesitamos las piedras de color para la sortija {piece} porfa. Se las dejas a Barto?\n\nGracias,\nMima - Asistente de Antiqua"
+        body = f"Hola Lola, necesitamos las piedras de color para la sortija {piece} (pedido {order_num}) porfa. Se las dejas a Barto?\n\nGracias,\nMima - Asistente de Antiqua"
     return subject, body
 
 
@@ -114,11 +115,12 @@ def email_template_barto(order: dict) -> tuple:
     peso = order.get("peso_estimado", 0)
     diamantes = order.get("diamantes_desc", "")
 
-    subject = f"Nuevo pedido Antiqua - {piece}"
+    order_num = order.get("shopify_order_number", "")
+    subject = f"Nuevo pedido Antiqua {order_num} - {piece}"
     lines = [
         "Hola Barto, podemos poner en marcha:",
         "",
-        f"Nuevo pedido Antiqua ({fecha_es(fecha_pedido)}):",
+        f"Nuevo pedido Antiqua {order_num} ({fecha_es(fecha_pedido)}):",
         f"- {piece}",
     ]
     if size:
@@ -139,10 +141,11 @@ def whatsapp_template_lola(order: dict) -> str:
     """Short WhatsApp message for Lola."""
     piece = order.get("product_name", "Pieza")
     piedras_desc = order.get("piedras_desc", "")
+    order_num = order.get("shopify_order_number", "")
     if piedras_desc:
-        return f"Hola Lola, necesitamos {piedras_desc} para la sortija {piece} porfa. Se las dejas a Barto?"
+        return f"Hola Lola, necesitamos {piedras_desc} para la sortija {piece} (pedido {order_num}) porfa. Se las dejas a Barto?"
     else:
-        return f"Hola Lola, necesitamos las piedras de color para la sortija {piece} porfa. Se las dejas a Barto?"
+        return f"Hola Lola, necesitamos las piedras de color para la sortija {piece} (pedido {order_num}) porfa. Se las dejas a Barto?"
 
 
 def whatsapp_template_barto(order: dict) -> str:
@@ -153,11 +156,12 @@ def whatsapp_template_barto(order: dict) -> str:
     fecha = fecha_limite_entrega()
     peso = order.get("peso_estimado", 0)
     diamantes = order.get("diamantes_desc", "")
+    order_num = order.get("shopify_order_number", "")
 
     lines = [
         "Hola Barto, podemos poner en marcha:",
         "",
-        f"Nuevo pedido Antiqua ({fecha_es(fecha_pedido)}):",
+        f"Nuevo pedido Antiqua {order_num} ({fecha_es(fecha_pedido)}):",
         f"- {piece}",
     ]
     if size:
