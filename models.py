@@ -107,6 +107,10 @@ def init_db():
         ("payment_group", "TEXT"),
         ("piedras_desc", "TEXT"),
         ("diamantes_desc", "TEXT"),
+        ("piedras_entregadas", "TEXT DEFAULT '0'"),
+        ("piedras_entregadas_at", "TEXT"),
+        ("joya_terminada", "TEXT DEFAULT '0'"),
+        ("joya_terminada_at", "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE orders ADD COLUMN {col} {coltype}")
@@ -381,6 +385,87 @@ def get_supplier_summary(supplier: str):
         "pending_payment": rows_to_list(pending_payment),
         "paid": rows_to_list(paid),
     }
+
+
+# ── Supplier portal ──
+def get_supplier_orders(supplier: str):
+    """Get orders relevant to a supplier.
+    barto: all notified/en_taller orders
+    lola: all notified/en_taller orders that have piedras (lola_estimado > 0 or piedras_desc not empty)
+    Returns dict with 'pending' and 'completed' lists.
+    """
+    conn = get_db()
+    if supplier == "barto":
+        pending = conn.execute(
+            "SELECT * FROM orders WHERE status IN ('notificado', 'en_taller') ORDER BY fecha_pedido DESC"
+        ).fetchall()
+        completed = conn.execute(
+            "SELECT * FROM orders WHERE joya_terminada = '1' ORDER BY joya_terminada_at DESC LIMIT 50"
+        ).fetchall()
+    elif supplier == "lola":
+        pending = conn.execute(
+            """SELECT * FROM orders
+               WHERE status IN ('notificado', 'en_taller')
+                 AND (COALESCE(lola_estimado, 0) > 0 OR (piedras_desc IS NOT NULL AND piedras_desc != ''))
+                 AND piedras_entregadas != '1'
+               ORDER BY fecha_pedido DESC"""
+        ).fetchall()
+        completed = conn.execute(
+            """SELECT * FROM orders
+               WHERE piedras_entregadas = '1'
+                 AND (COALESCE(lola_estimado, 0) > 0 OR (piedras_desc IS NOT NULL AND piedras_desc != ''))
+               ORDER BY piedras_entregadas_at DESC LIMIT 50"""
+        ).fetchall()
+    else:
+        conn.close()
+        return {"pending": [], "completed": []}
+    conn.close()
+    return {"pending": rows_to_list(pending), "completed": rows_to_list(completed)}
+
+
+def mark_piedras_entregadas(order_id: int):
+    """Lola marks stones delivered to Barto. Sets piedras_entregadas='1' and timestamp."""
+    conn = get_db()
+    now = datetime.datetime.now().isoformat()
+    conn.execute(
+        "UPDATE orders SET piedras_entregadas='1', piedras_entregadas_at=?, updated_at=? WHERE id=?",
+        (now, now, order_id)
+    )
+    conn.commit()
+    conn.close()
+    log_activity(order_id, "Piedras entregadas a Barto", f"Lola marcó entrega el {now}")
+
+
+def mark_joya_terminada(order_id: int):
+    """Barto marks piece finished. Sets joya_terminada='1', timestamp, captures gold price, changes status to 'entregado'."""
+    from gold_price import get_current_gold_price
+    conn = get_db()
+    now = datetime.datetime.now().isoformat()
+
+    # Get order to calculate gold cost
+    row = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+    if not row:
+        conn.close()
+        return
+
+    order = dict(row)
+    real_gold = get_current_gold_price()
+    peso_est = float(order.get("peso_estimado", 0) or 0)
+    oro_real = peso_est * real_gold
+
+    conn.execute(
+        """UPDATE orders SET
+            joya_terminada='1', joya_terminada_at=?,
+            precio_oro_real=?, oro_total_real=?,
+            status='entregado', updated_at=?
+           WHERE id=?""",
+        (now, round(real_gold, 2), round(oro_real, 2), now, order_id)
+    )
+    conn.commit()
+    conn.close()
+    log_activity(order_id, "Joya terminada por Barto",
+                 f"Oro 24K: {real_gold:.2f} EUR/gr x {peso_est:.1f}gr = {oro_real:.2f} EUR")
+    log_activity(order_id, "Estado cambiado a entregado")
 
 
 if __name__ == "__main__":

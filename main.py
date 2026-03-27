@@ -17,6 +17,7 @@ from models import (
     init_db, get_db, get_order, get_all_orders, update_order,
     log_activity, get_activity, get_dashboard_stats,
     get_supplier_summary, get_setting, set_setting, get_all_products,
+    get_supplier_orders, mark_piedras_entregadas, mark_joya_terminada,
 )
 from catalog import load_catalog, estimate_costs
 from shopify_client import sync_from_api, sync_from_csv
@@ -211,6 +212,50 @@ def suppliers_page(request: Request):
             "barto_summary": {},
             "error": str(e),
         })
+
+# ---------------------------------------------------------------------------
+# Supplier Portal (public, no auth required)
+# ---------------------------------------------------------------------------
+@app.get("/proveedor/{supplier}")
+def supplier_portal(request: Request, supplier: str):
+    if supplier not in ("barto", "lola"):
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+    try:
+        data = get_supplier_orders(supplier)
+        supplier_name = "Barto" if supplier == "barto" else "Lola"
+        return templates.TemplateResponse(name="proveedor.html", request=request, context={
+            "supplier": supplier,
+            "supplier_name": supplier_name,
+            "pending": data["pending"],
+            "completed": data["completed"],
+        })
+    except Exception as e:
+        return templates.TemplateResponse(name="proveedor.html", request=request, context={
+            "supplier": supplier,
+            "supplier_name": "Barto" if supplier == "barto" else "Lola",
+            "pending": [],
+            "completed": [],
+            "error": str(e),
+        })
+
+
+@app.post("/proveedor/barto/entregar/{order_id}")
+def barto_mark_done(request: Request, order_id: int):
+    try:
+        mark_joya_terminada(order_id)
+        return RedirectResponse(url="/proveedor/barto", status_code=302)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/proveedor/lola/entregar/{order_id}")
+def lola_mark_done(request: Request, order_id: int):
+    try:
+        mark_piedras_entregadas(order_id)
+        return RedirectResponse(url="/proveedor/lola", status_code=302)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ---------------------------------------------------------------------------
 # API Endpoints

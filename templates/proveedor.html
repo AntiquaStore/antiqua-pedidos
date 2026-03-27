@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antiqua | Portal de {{ supplier_name }}</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS v3 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        taupe: '#918a77',
+                        bronze: '#ab8c52',
+                        cream: '#fbfbfb',
+                        dark: '#212121',
+                        secondary: '#626262',
+                        line: '#e5e2dc',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Figtree', sans-serif;
+            background-color: #fbfbfb;
+            color: #212121;
+        }
+        h1, h2, h3 {
+            font-family: 'Libre Baskerville', serif;
+        }
+    </style>
+</head>
+<body class="bg-cream min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-line">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
+            <div>
+                <span class="font-bold text-xl tracking-widest text-dark" style="font-family: 'Libre Baskerville', serif;">ANTIQUA</span>
+                <span class="ml-3 text-sm text-secondary tracking-wide">&mdash; Portal de {{ supplier_name }}</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="flex-1">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+
+            {% if error %}
+            <div class="mb-6 border border-red-300 bg-red-50 px-4 py-3 text-red-700 text-sm">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            {# ══════════════════════════════════════════════════════════════
+               BARTO VIEW
+               ══════════════════════════════════════════════════════════════ #}
+            {% if supplier == 'barto' %}
+
+            <!-- Pending orders -->
+            <div class="mb-10">
+                <h2 class="text-xl text-dark mb-5">Pedidos en producci&oacute;n</h2>
+                {% if pending %}
+                <div class="bg-white border border-line overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[700px]">
+                            <thead>
+                                <tr class="bg-[#f8f7f5] border-b border-line">
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">#Pedido</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Pieza</th>
+                                    <th class="text-center text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Talla</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Fecha pedido</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Diamantes</th>
+                                    <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Peso oro</th>
+                                    <th class="text-center text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Piedras</th>
+                                    <th class="text-center text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Acci&oacute;n</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in pending %}
+                                <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
+                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.shopify_order_number or order.id }}</td>
+                                    <td class="px-4 py-3 text-sm text-dark font-medium">{{ order.product_name or '-' }}</td>
+                                    <td class="px-4 py-3 text-sm text-secondary text-center">{{ order.ring_size or '-' }}</td>
+                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.fecha_pedido[:10] if order.fecha_pedido else '-' }}</td>
+                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.diamantes_desc or '-' }}</td>
+                                    <td class="px-4 py-3 text-sm text-dark text-right tabular-nums">
+                                        {% if order.peso_estimado %}{{ "%.1f"|format(order.peso_estimado) }} gr{% else %}-{% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        {% if (order.lola_estimado and order.lola_estimado > 0) or (order.piedras_desc and order.piedras_desc != '') %}
+                                            {% if order.piedras_entregadas == '1' %}
+                                            <span class="inline-block px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 border border-green-200">&#10003; Listas</span>
+                                            {% else %}
+                                            <span class="inline-block px-2 py-0.5 text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200">&#9203; Pendientes</span>
+                                            {% endif %}
+                                        {% else %}
+                                        <span class="text-xs text-secondary">&mdash;</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        {% if order.joya_terminada != '1' %}
+                                        <form method="POST" action="/proveedor/barto/entregar/{{ order.id }}"
+                                              onsubmit="return confirm('&iquest;Marcar esta joya como terminada?\n\nPedido: {{ order.shopify_order_number or order.id }}\nPieza: {{ order.product_name }}');">
+                                            <button type="submit"
+                                                    class="px-3 py-1.5 bg-dark text-white text-xs font-semibold uppercase tracking-wide hover:bg-taupe transition-colors">
+                                                Joya terminada
+                                            </button>
+                                        </form>
+                                        {% else %}
+                                        <span class="text-xs text-green-700 font-semibold">&#10003; Entregada</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <div class="bg-white border border-line px-5 py-10 text-center">
+                    <p class="text-sm text-secondary">No hay pedidos en producci&oacute;n</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Completed orders -->
+            <div>
+                <h2 class="text-xl text-dark mb-5">Completados</h2>
+                {% if completed %}
+                <div class="bg-white border border-line overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[500px]">
+                            <thead>
+                                <tr class="bg-[#f8f7f5] border-b border-line">
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">#Pedido</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Pieza</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Fecha entrega</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in completed %}
+                                <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
+                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.shopify_order_number or order.id }}</td>
+                                    <td class="px-4 py-3 text-sm text-dark font-medium">{{ order.product_name or '-' }}</td>
+                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.joya_terminada_at[:10] if order.joya_terminada_at else '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <div class="bg-white border border-line px-5 py-10 text-center">
+                    <p class="text-sm text-secondary">Sin entregas recientes</p>
+                </div>
+                {% endif %}
+            </div>
+
+            {# ══════════════════════════════════════════════════════════════
+               LOLA VIEW
+               ══════════════════════════════════════════════════════════════ #}
+            {% elif supplier == 'lola' %}
+
+            <!-- Pending stones -->
+            <div class="mb-10">
+                <h2 class="text-xl text-dark mb-5">Piedras pendientes</h2>
+                {% if pending %}
+                <div class="bg-white border border-line overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[500px]">
+                            <thead>
+                                <tr class="bg-[#f8f7f5] border-b border-line">
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">#Pedido</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Pieza</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Piedras necesarias</th>
+                                    <th class="text-center text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Acci&oacute;n</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in pending %}
+                                <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
+                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.shopify_order_number or order.id }}</td>
+                                    <td class="px-4 py-3 text-sm text-dark font-medium">{{ order.product_name or '-' }}</td>
+                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.piedras_desc or 'Piedras de color' }}</td>
+                                    <td class="px-4 py-3 text-center">
+                                        <form method="POST" action="/proveedor/lola/entregar/{{ order.id }}"
+                                              onsubmit="return confirm('&iquest;Marcar piedras como entregadas a Barto?\n\nPedido: {{ order.shopify_order_number or order.id }}\nPieza: {{ order.product_name }}');">
+                                            <button type="submit"
+                                                    class="px-3 py-1.5 bg-dark text-white text-xs font-semibold uppercase tracking-wide hover:bg-taupe transition-colors">
+                                                Entregadas a Barto
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <div class="bg-white border border-line px-5 py-10 text-center">
+                    <p class="text-sm text-secondary">No hay piedras pendientes</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Delivered stones -->
+            <div>
+                <h2 class="text-xl text-dark mb-5">Entregadas</h2>
+                {% if completed %}
+                <div class="bg-white border border-line overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[500px]">
+                            <thead>
+                                <tr class="bg-[#f8f7f5] border-b border-line">
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">#Pedido</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Pieza</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Piedras</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Fecha entrega</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in completed %}
+                                <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
+                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.shopify_order_number or order.id }}</td>
+                                    <td class="px-4 py-3 text-sm text-dark font-medium">{{ order.product_name or '-' }}</td>
+                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.piedras_desc or 'Piedras de color' }}</td>
+                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.piedras_entregadas_at[:10] if order.piedras_entregadas_at else '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <div class="bg-white border border-line px-5 py-10 text-center">
+                    <p class="text-sm text-secondary">Sin entregas recientes</p>
+                </div>
+                {% endif %}
+            </div>
+
+            {% endif %}
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-line py-8">
+        <p class="text-center text-sm text-secondary tracking-wide">Antiqua &copy; 2026</p>
+    </footer>
+
+</body>
+</html>

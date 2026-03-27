@@ -268,6 +268,12 @@
                             <span class="inline-block px-3 py-1 text-xs uppercase tracking-wide font-semibold text-white {{ status_colors.get(order.status, 'bg-secondary') }}">
                                 {{ status_labels.get(order.status, order.status or '-') }}
                             </span>
+                            {% if order.piedras_entregadas == '1' %}
+                            <span class="block mt-1 text-[10px] font-semibold text-green-700">Piedras &#10003;</span>
+                            {% endif %}
+                            {% if order.joya_terminada == '1' %}
+                            <span class="block mt-0.5 text-[10px] font-semibold text-green-700">Joya lista &#10003;</span>
+                            {% endif %}
                         </td>
                         <td class="px-5 py-4 text-right">
                             <a href="/order/{{ order.id }}" class="text-sm font-medium text-taupe hover:text-bronze transition-colors">Ver</a>

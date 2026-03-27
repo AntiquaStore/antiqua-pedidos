@@ -131,6 +131,53 @@
 </div>
 
 {# ══════════════════════════════════════════════════════════════
+   2b. SUPPLY CHAIN STATUS
+   ══════════════════════════════════════════════════════════════ #}
+{% if order.status in ('notificado', 'en_taller', 'entregado', 'completado') %}
+<div class="bg-white border border-line p-6 mb-8">
+    <h2 class="text-lg mb-4 text-dark">Cadena de producci&oacute;n</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="flex items-center gap-3">
+            {% if order.piedras_entregadas == '1' %}
+            <span class="inline-flex items-center justify-center w-8 h-8 bg-green-100 text-green-700">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            </span>
+            <div>
+                <p class="text-sm font-medium text-dark">Piedras: Entregadas</p>
+                <p class="text-xs text-secondary">{{ order.piedras_entregadas_at[:16] if order.piedras_entregadas_at else '' }}</p>
+            </div>
+            {% else %}
+            <span class="inline-flex items-center justify-center w-8 h-8 bg-amber-50 text-amber-500">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+            <div>
+                <p class="text-sm font-medium text-dark">Piedras: Pendientes</p>
+            </div>
+            {% endif %}
+        </div>
+        <div class="flex items-center gap-3">
+            {% if order.joya_terminada == '1' %}
+            <span class="inline-flex items-center justify-center w-8 h-8 bg-green-100 text-green-700">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            </span>
+            <div>
+                <p class="text-sm font-medium text-dark">Joya: Terminada</p>
+                <p class="text-xs text-secondary">{{ order.joya_terminada_at[:16] if order.joya_terminada_at else '' }}</p>
+            </div>
+            {% else %}
+            <span class="inline-flex items-center justify-center w-8 h-8 bg-amber-50 text-amber-500">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+            <div>
+                <p class="text-sm font-medium text-dark">Joya: En producci&oacute;n</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════
    3. COST COMPARISON TABLE
    ══════════════════════════════════════════════════════════════ #}
 <div class="bg-white border border-line p-6 mb-8">
