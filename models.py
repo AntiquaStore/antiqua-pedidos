@@ -353,10 +353,18 @@ def get_dashboard_stats():
         "SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND COALESCE(product_type,'joya') != 'joyero'",
         (f"{current_month}%",)
     ).fetchone()["c"]
+    facturacion_mes = conn.execute(
+        "SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? AND COALESCE(product_type,'joya') != 'joyero'",
+        (f"{current_month}%",)
+    ).fetchone()["s"]
     ventas_ano = conn.execute(
         "SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND COALESCE(product_type,'joya') != 'joyero'",
         (f"{current_year}%",)
     ).fetchone()["c"]
+    facturacion_ano = conn.execute(
+        "SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? AND COALESCE(product_type,'joya') != 'joyero'",
+        (f"{current_year}%",)
+    ).fetchone()["s"]
     mes_nombre = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"][now.month - 1]
 
     conn.close()
@@ -374,7 +382,9 @@ def get_dashboard_stats():
         "avg_ticket_joyas": avg_ticket_joyas,
         "avg_ticket_joyas_iva": avg_ticket_joyas_iva,
         "ventas_mes": ventas_mes,
+        "facturacion_mes": facturacion_mes,
         "ventas_ano": ventas_ano,
+        "facturacion_ano": facturacion_ano,
         "mes_nombre": mes_nombre,
     }
 
