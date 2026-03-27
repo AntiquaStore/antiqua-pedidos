@@ -221,8 +221,40 @@ def supplier_portal(request: Request, supplier: str):
     if supplier not in ("barto", "lola"):
         raise HTTPException(status_code=404, detail="Proveedor no encontrado")
     try:
+        from datetime import date, timedelta
+        from notifications import add_business_days, MESES
+
         data = get_supplier_orders(supplier)
         supplier_name = "Barto" if supplier == "barto" else "Lola"
+
+        # Calculate deadline and urgency for each pending order
+        today = date.today()
+        for order in data["pending"]:
+            fecha = order.get("fecha_pedido", "")
+            if fecha and len(fecha) >= 10:
+                try:
+                    order_date = date.fromisoformat(fecha[:10])
+                    deadline = add_business_days(order_date, 18)
+                    days_left = (deadline - today).days
+                    order["deadline"] = f"{deadline.day} de {MESES[deadline.month - 1]}"
+                    order["days_left"] = days_left
+                    if days_left < 0:
+                        order["urgency"] = "overdue"
+                    elif days_left < 5:
+                        order["urgency"] = "urgent"
+                    elif days_left <= 10:
+                        order["urgency"] = "warning"
+                    else:
+                        order["urgency"] = "ok"
+                except:
+                    order["deadline"] = "-"
+                    order["days_left"] = 99
+                    order["urgency"] = "ok"
+            else:
+                order["deadline"] = "-"
+                order["days_left"] = 99
+                order["urgency"] = "ok"
+
         return templates.TemplateResponse(name="proveedor.html", request=request, context={
             "supplier": supplier,
             "supplier_name": supplier_name,
