@@ -289,7 +289,7 @@ def set_setting(key: str, value: str):
 def get_dashboard_stats():
     conn = get_db()
     total = conn.execute("SELECT COUNT(*) as c FROM orders").fetchone()["c"]
-    pending = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='nuevo'").fetchone()["c"]
+    pending = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status != 'entregado'").fetchone()["c"]
     notified = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='notificado'").fetchone()["c"]
     in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='en_taller'").fetchone()["c"]
     revenue = conn.execute("SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders").fetchone()["s"]
