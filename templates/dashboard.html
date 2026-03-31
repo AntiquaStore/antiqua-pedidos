@@ -5,15 +5,13 @@
 {# ── Status helpers ── #}
 {% set status_labels = {
     'nuevo': 'Nuevo',
-    'notificado': 'Notificado',
-    'en_taller': 'En taller',
+    'notificado': 'En taller',
     'entregado': 'Entregado',
     'completado': 'Completado'
 } %}
 {% set status_colors = {
     'nuevo': 'bg-[#5a7b9a]',
-    'notificado': 'bg-bronze',
-    'en_taller': 'bg-taupe',
+    'notificado': 'bg-taupe',
     'entregado': 'bg-[#4a7c59]',
     'completado': 'bg-dark'
 } %}
@@ -70,11 +68,11 @@
     </div>
     <div class="bg-white border border-line p-5">
         <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.pending or 0 }}</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Pendientes</p>
+        <p class="text-sm text-secondary mt-1 tracking-wide">Pendientes (no entregados)</p>
     </div>
     <div class="bg-white border border-line p-5">
         <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.in_workshop or 0 }}</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">En taller</p>
+        <p class="text-sm text-secondary mt-1 tracking-wide">En taller (notificados)</p>
     </div>
 </div>
 
@@ -124,7 +122,7 @@
             <option value="">Todos los estados</option>
             <option value="nuevo" {{ 'selected' if current_status == 'nuevo' }}>Nuevo</option>
             <option value="notificado" {{ 'selected' if current_status == 'notificado' }}>Notificado</option>
-            <option value="en_taller" {{ 'selected' if current_status == 'en_taller' }}>En taller</option>
+            <option value="notificado" {{ 'selected' if current_status == 'notificado' }}>En taller</option>
             <option value="entregado" {{ 'selected' if current_status == 'entregado' }}>Entregado</option>
             <option value="completado" {{ 'selected' if current_status == 'completado' }}>Completado</option>
         </select>

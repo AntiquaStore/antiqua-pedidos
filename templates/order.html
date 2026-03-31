@@ -60,8 +60,7 @@
             {# Status badge #}
             {% set status_colors = {
                 'nuevo':      'bg-[#5a7b9a] text-white',
-                'notificado': 'bg-bronze text-white',
-                'en_taller':  'bg-taupe text-white',
+                'notificado': 'bg-taupe text-white',
                 'entregado':  'bg-[#4a7c59] text-white',
                 'completado': 'bg-dark text-white'
             } %}
@@ -133,7 +132,7 @@
 {# ══════════════════════════════════════════════════════════════
    2b. SUPPLY CHAIN STATUS
    ══════════════════════════════════════════════════════════════ #}
-{% if order.status in ('notificado', 'en_taller', 'entregado', 'completado') %}
+{% if order.status in ('notificado', 'entregado', 'completado') %}
 <div class="bg-white border border-line p-6 mb-8">
     <h2 class="text-lg mb-4 text-dark">Cadena de producci&oacute;n</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -467,9 +466,8 @@
    6. STATUS CHANGE BUTTONS
    ══════════════════════════════════════════════════════════════ #}
 {% set transitions = {
-    'nuevo':      {'next': 'notificado', 'label': 'Marcar como Notificado'},
-    'notificado': {'next': 'en_taller',  'label': 'Marcar como En Taller'},
-    'en_taller':  {'next': 'entregado',  'label': 'Marcar como Entregado'},
+    'nuevo':      {'next': 'notificado', 'label': 'Notificar a taller'},
+    'notificado': {'next': 'entregado',  'label': 'Marcar como Entregado'},
     'entregado':  {'next': 'completado', 'label': 'Marcar como Completado'}
 } %}
 

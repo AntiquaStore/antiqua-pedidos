@@ -117,6 +117,9 @@ def init_db():
         except Exception:
             pass  # Column already exists
 
+    # Migrate: unify en_taller → notificado (single workshop status)
+    conn.execute("UPDATE orders SET status='notificado' WHERE status='en_taller'")
+
     conn.commit()
     conn.close()
 
@@ -290,8 +293,7 @@ def get_dashboard_stats():
     conn = get_db()
     total = conn.execute("SELECT COUNT(*) as c FROM orders").fetchone()["c"]
     pending = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status != 'entregado'").fetchone()["c"]
-    notified = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='notificado'").fetchone()["c"]
-    in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='en_taller'").fetchone()["c"]
+    in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='notificado'").fetchone()["c"]
     revenue = conn.execute("SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders").fetchone()["s"]
 
     # Joyas vs Joyeros vs Cadenas counts (partial payments grouped = 1 joya)
@@ -371,7 +373,6 @@ def get_dashboard_stats():
     return {
         "total": total,
         "pending": pending,
-        "notified": notified,
         "in_workshop": in_workshop,
         "revenue": revenue,
         "avg_ticket": avg_ticket,
@@ -418,14 +419,14 @@ def get_supplier_summary(supplier: str):
 # ── Supplier portal ──
 def get_supplier_orders(supplier: str):
     """Get orders relevant to a supplier.
-    barto: all notified/en_taller orders
-    lola: all notified/en_taller orders that have piedras (lola_estimado > 0 or piedras_desc not empty)
+    barto: all non-delivered orders (he's responsible for the whole workshop)
+    lola: all non-delivered orders that have piedras (lola_estimado > 0 or piedras_desc not empty)
     Returns dict with 'pending' and 'completed' lists.
     """
     conn = get_db()
     if supplier == "barto":
         pending = conn.execute(
-            "SELECT * FROM orders WHERE status IN ('notificado', 'en_taller') ORDER BY fecha_pedido DESC"
+            "SELECT * FROM orders WHERE status != 'entregado' ORDER BY fecha_pedido DESC"
         ).fetchall()
         completed = conn.execute(
             "SELECT * FROM orders WHERE joya_terminada = '1' ORDER BY joya_terminada_at DESC LIMIT 50"
@@ -433,7 +434,7 @@ def get_supplier_orders(supplier: str):
     elif supplier == "lola":
         pending = conn.execute(
             """SELECT * FROM orders
-               WHERE status IN ('notificado', 'en_taller')
+               WHERE status != 'entregado'
                  AND (COALESCE(lola_estimado, 0) > 0 OR (piedras_desc IS NOT NULL AND piedras_desc != ''))
                  AND piedras_entregadas != '1'
                ORDER BY fecha_pedido DESC"""
