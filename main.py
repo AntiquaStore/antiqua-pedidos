@@ -280,6 +280,34 @@ def barto_mark_done(request: Request, order_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/bulk-deliver")
+def bulk_deliver(request: Request):
+    """Mark all orders before a given order number as delivered."""
+    import datetime as _dt
+    conn = get_db()
+    now = _dt.datetime.now().isoformat()
+    # Mark all orders with shopify_order_number < #1900 as entregado
+    orders = conn.execute(
+        "SELECT id, shopify_order_number FROM orders WHERE status != 'entregado'"
+    ).fetchall()
+    count = 0
+    for o in orders:
+        num_str = (o["shopify_order_number"] or "").replace("#", "").strip()
+        try:
+            num = int(num_str)
+        except ValueError:
+            continue
+        if num < 1900:
+            conn.execute(
+                "UPDATE orders SET status='entregado', joya_terminada='1', joya_terminada_at=?, updated_at=? WHERE id=?",
+                (now, now, o["id"])
+            )
+            count += 1
+    conn.commit()
+    conn.close()
+    return JSONResponse({"ok": True, "delivered": count})
+
+
 @app.post("/proveedor/lola/entregar/{order_id}")
 def lola_mark_done(request: Request, order_id: int):
     try:
