@@ -426,7 +426,7 @@ def get_supplier_orders(supplier: str):
     conn = get_db()
     if supplier == "barto":
         pending = conn.execute(
-            "SELECT * FROM orders WHERE status != 'entregado' ORDER BY fecha_pedido DESC"
+            "SELECT * FROM orders WHERE status != 'entregado' AND COALESCE(product_type,'joya') != 'joyero' ORDER BY fecha_pedido DESC"
         ).fetchall()
         completed = conn.execute(
             "SELECT * FROM orders WHERE joya_terminada = '1' ORDER BY joya_terminada_at DESC LIMIT 50"

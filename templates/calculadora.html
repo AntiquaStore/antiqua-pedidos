@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div x-data="calculadora()" x-init="init()">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div>
+            <h1 class="text-2xl md:text-3xl text-dark">Calculadora de Personalizaciones</h1>
+            <p class="text-sm text-secondary mt-1">Simula costes y márgenes para piezas personalizadas</p>
+        </div>
+        <div class="flex items-center gap-2" x-show="goldPrice > 0">
+            <span class="text-xs text-secondary uppercase tracking-wide">Oro 24K:</span>
+            <span class="text-sm font-semibold text-bronze" x-text="formatEur(goldPrice) + ' €/gr'"></span>
+        </div>
+    </div>
+
+    <!-- Error -->
+    {% if error %}
+    <div class="border border-red-300 bg-red-50 px-5 py-4 mb-6">
+        <p class="text-sm text-red-700">{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Product selector -->
+    <div class="bg-white border border-line px-5 py-5 mb-6">
+        <label class="block text-xs uppercase tracking-wider text-secondary font-semibold mb-2">Selecciona una pieza del catálogo</label>
+        <select x-model="selectedProductId" @change="onProductSelect()"
+                class="w-full border border-line px-4 py-3 text-sm text-dark bg-white focus:outline-none focus:border-taupe transition-colors"
+                style="border-radius: 0;">
+            <option value="">— Elige una pieza —</option>
+            <template x-for="p in products" :key="p.id">
+                <option :value="p.id" x-text="p.name + (p.tipo ? ' (' + p.tipo + ')' : '') + ' — PVP ' + formatEur(p.pvp || 0) + ' €'"></option>
+            </template>
+        </select>
+    </div>
+
+    <!-- Calculator body (shown when product selected) -->
+    <template x-if="selected">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- LEFT: Cost breakdown -->
+            <div class="space-y-4">
+                <h2 class="text-lg text-dark mb-2">Desglose de Costes</h2>
+
+                <!-- Piedras -->
+                <div class="bg-white border border-line px-5 py-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs uppercase tracking-wider text-secondary font-semibold">Piedras de color</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div>
+                            <label class="text-xs text-secondary">Descripción</label>
+                            <input type="text" x-model="costs.piedras_desc"
+                                   class="w-full border border-line px-3 py-2 text-sm text-dark focus:outline-none focus:border-taupe"
+                                   style="border-radius: 0;" placeholder="Ej: 2x rubí 0.30ct">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary">Coste (€)</label>
+                            <input type="number" step="0.01" min="0" x-model.number="costs.piedras_total"
+                                   class="w-full border border-line px-3 py-2 text-sm text-dark tabular-nums focus:outline-none focus:border-taupe"
+                                   style="border-radius: 0;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Diamantes -->
+                <div class="bg-white border border-line px-5 py-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs uppercase tracking-wider text-secondary font-semibold">Diamantes</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div>
+                            <label class="text-xs text-secondary">Descripción</label>
+                            <input type="text" x-model="costs.diamantes_desc"
+                                   class="w-full border border-line px-3 py-2 text-sm text-dark focus:outline-none focus:border-taupe"
+                                   style="border-radius: 0;" placeholder="Ej: 4x brillante 0.02ct">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary">Coste (€)</label>
+                            <input type="number" step="0.01" min="0" x-model.number="costs.diamantes_total"
+                                   class="w-full border border-line px-3 py-2 text-sm text-dark tabular-nums focus:outline-none focus:border-taupe"
+                                   style="border-radius: 0;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Taller -->
+                <div class="bg-white border border-line px-5 py-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs uppercase tracking-wider text-secondary font-semibold">Taller</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="text-xs text-secondary">Hechura (€)</label>
+                            <input type="number" step="0.01" min="0" x-model.number="costs.taller_hechura"
+                                   class="w-full border border-line px-3 py-2 text-sm text-dark tabular-nums focus:outline-none focus:border-taupe"
+                                   style="border-radius: 0;">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary">Engaste (€)</label>
+                            <input type="number" step="0.01" min="0" x-model.number="costs.taller_engaste"
+                                   class="w-full border border-line px-3 py-2 text-sm text-dark tabular-nums focus:outline-none focus:border-taupe"
+                                   style="border-radius: 0;">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary">Otros (€)</label>
+                            <input type="number" step="0.01" min="0" x-model.number="costs.taller_otros"
+                                   class="w-full border border-line px-3 py-2 text-sm text-dark tabular-nums focus:outline-none focus:border-taupe"
+                                   style="border-radius: 0;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Oro -->
+                <div class="bg-white border border-line px-5 py-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs uppercase tracking-wider text-secondary font-semibold">Oro</span>
+                        <span class="text-xs text-bronze font-medium" x-text="'24K: ' + formatEur(goldPrice) + ' €/gr'"></span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-secondary">Peso (gr)</label>
+                            <input type="number" step="0.01" min="0" x-model.number="costs.peso_gr"
+                                   class="w-full border border-line px-3 py-2 text-sm text-dark tabular-nums focus:outline-none focus:border-taupe"
+                                   style="border-radius: 0;">
+                        </div>
+                        <div>
+                            <label class="text-xs text-secondary">Coste oro total</label>
+                            <div class="border border-line bg-[#f8f7f5] px-3 py-2 text-sm text-dark tabular-nums font-medium"
+                                 x-text="formatEur(oroTotal) + ' €'"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Envío -->
+                <div class="bg-white border border-line px-5 py-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs uppercase tracking-wider text-secondary font-semibold">Envío y packaging</span>
+                    </div>
+                    <div>
+                        <label class="text-xs text-secondary">Coste (€)</label>
+                        <input type="number" step="0.01" min="0" x-model.number="costs.envio"
+                               class="w-full border border-line px-3 py-2 text-sm text-dark tabular-nums focus:outline-none focus:border-taupe"
+                               style="border-radius: 0;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: Results -->
+            <div class="space-y-4">
+                <h2 class="text-lg text-dark mb-2">Resultado</h2>
+
+                <!-- Fabrication cost summary -->
+                <div class="bg-white border border-line px-5 py-5">
+                    <div class="text-xs uppercase tracking-wider text-secondary font-semibold mb-4">Coste de fabricación</div>
+
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-secondary">Piedras</span>
+                            <span class="tabular-nums text-dark" x-text="formatEur(costs.piedras_total) + ' €'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-secondary">Diamantes</span>
+                            <span class="tabular-nums text-dark" x-text="formatEur(costs.diamantes_total) + ' €'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-secondary">Taller (hechura + engaste + otros)</span>
+                            <span class="tabular-nums text-dark" x-text="formatEur(tallerTotal) + ' €'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-secondary">Oro (<span x-text="costs.peso_gr.toFixed(1)"></span> gr)</span>
+                            <span class="tabular-nums text-dark" x-text="formatEur(oroTotal) + ' €'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-secondary">Envío</span>
+                            <span class="tabular-nums text-dark" x-text="formatEur(costs.envio) + ' €'"></span>
+                        </div>
+                        <div class="flex justify-between pt-3 border-t border-line font-semibold">
+                            <span class="text-dark">COSTE TOTAL</span>
+                            <span class="tabular-nums text-dark" x-text="formatEur(newCmv) + ' €'"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pricing -->
+                <div class="bg-white border border-line px-5 py-5">
+                    <div class="text-xs uppercase tracking-wider text-secondary font-semibold mb-4">Precios y margen</div>
+
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-secondary">PVP original (catálogo, con IVA)</span>
+                            <span class="tabular-nums text-dark" x-text="formatEur(originalPvp) + ' €'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-secondary">CMV original (catálogo)</span>
+                            <span class="tabular-nums text-dark" x-text="formatEur(originalCmv) + ' €'"></span>
+                        </div>
+
+                        <div class="pt-3 border-t border-line"></div>
+
+                        <div class="flex justify-between items-center">
+                            <span class="text-dark font-semibold">PVP sugerido (con IVA)</span>
+                            <span class="tabular-nums text-dark text-lg font-bold" x-text="formatEur(pvpSugerido) + ' €'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-secondary">PVP sugerido (sin IVA)</span>
+                            <span class="tabular-nums text-dark" x-text="formatEur(pvpSugeridoSinIva) + ' €'"></span>
+                        </div>
+
+                        <div class="pt-3 border-t border-line"></div>
+
+                        <div class="flex justify-between">
+                            <span class="text-secondary">Margen bruto</span>
+                            <span class="tabular-nums font-semibold"
+                                  :class="margenBruto >= 0 ? 'text-[#4a7c59]' : 'text-red-600'"
+                                  x-text="formatEur(margenBruto) + ' €'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-secondary">Margen bruto (%)</span>
+                            <span class="tabular-nums font-semibold"
+                                  :class="margenPct >= 0 ? 'text-[#4a7c59]' : 'text-red-600'"
+                                  x-text="margenPct.toFixed(1) + '%'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-secondary">Diferencia vs original</span>
+                            <span class="tabular-nums font-medium"
+                                  :class="diferencia >= 0 ? 'text-bronze' : 'text-red-600'"
+                                  x-text="(diferencia >= 0 ? '+' : '') + formatEur(diferencia) + ' €'"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick note -->
+                <div class="bg-[#f8f7f5] border border-line px-5 py-3">
+                    <p class="text-xs text-secondary">
+                        El PVP sugerido mantiene el mismo margen absoluto que la pieza original.
+                        El precio del oro se actualiza automáticamente desde el mercado.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </template>
+
+    <!-- Empty state -->
+    <template x-if="!selected && products.length > 0">
+        <div class="bg-white border border-line px-5 py-16 text-center">
+            <p class="text-secondary text-sm">Selecciona una pieza del catálogo para empezar a calcular</p>
+        </div>
+    </template>
+
+    <template x-if="products.length === 0 && !loading">
+        <div class="bg-white border border-line px-5 py-16 text-center">
+            <p class="text-secondary text-sm">No hay productos en el catálogo</p>
+        </div>
+    </template>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function calculadora() {
+    return {
+        products: [],
+        selectedProductId: '',
+        selected: null,
+        goldPrice: 0,
+        loading: true,
+        costs: {
+            piedras_desc: '',
+            piedras_total: 0,
+            diamantes_desc: '',
+            diamantes_total: 0,
+            taller_hechura: 0,
+            taller_engaste: 0,
+            taller_otros: 0,
+            peso_gr: 0,
+            envio: 0,
+        },
+        originalPvp: 0,
+        originalCmv: 0,
+
+        async init() {
+            try {
+                const [prodRes, goldRes] = await Promise.all([
+                    fetch('/api/products'),
+                    fetch('/api/gold-price'),
+                ]);
+                this.products = await prodRes.json();
+                const goldData = await goldRes.json();
+                this.goldPrice = goldData.price_24k_gram || 0;
+            } catch (e) {
+                console.error('Error loading data:', e);
+            }
+            this.loading = false;
+        },
+
+        onProductSelect() {
+            const id = parseInt(this.selectedProductId);
+            if (!id) {
+                this.selected = null;
+                return;
+            }
+            const p = this.products.find(x => x.id === id);
+            if (!p) { this.selected = null; return; }
+
+            this.selected = p;
+            this.originalPvp = p.pvp || 0;
+            this.originalCmv = p.cmv || 0;
+
+            this.costs.piedras_desc = p.piedras_desc || '';
+            this.costs.piedras_total = p.piedras_total || 0;
+            this.costs.diamantes_desc = p.diamantes_desc || '';
+            this.costs.diamantes_total = p.diamantes_total || 0;
+            this.costs.taller_hechura = p.taller_hechura || 0;
+            this.costs.taller_engaste = p.taller_engaste || 0;
+            this.costs.taller_otros = p.taller_otros || 0;
+            this.costs.peso_gr = p.peso_gr || 0;
+            this.costs.envio = p.envio || 0;
+        },
+
+        get tallerTotal() {
+            return (this.costs.taller_hechura || 0)
+                 + (this.costs.taller_engaste || 0)
+                 + (this.costs.taller_otros || 0);
+        },
+
+        get oroTotal() {
+            return (this.costs.peso_gr || 0) * this.goldPrice;
+        },
+
+        get newCmv() {
+            return (this.costs.piedras_total || 0)
+                 + (this.costs.diamantes_total || 0)
+                 + this.tallerTotal
+                 + this.oroTotal
+                 + (this.costs.envio || 0);
+        },
+
+        get pvpSugerido() {
+            // Maintain same absolute margin: PVP_orig + (new_cost - original_cost)
+            return this.originalPvp + (this.newCmv - this.originalCmv);
+        },
+
+        get pvpSugeridoSinIva() {
+            return this.pvpSugerido / 1.21;
+        },
+
+        get margenBruto() {
+            return this.pvpSugeridoSinIva - this.newCmv;
+        },
+
+        get margenPct() {
+            if (this.pvpSugeridoSinIva === 0) return 0;
+            return (this.margenBruto / this.pvpSugeridoSinIva) * 100;
+        },
+
+        get diferencia() {
+            return this.pvpSugerido - this.originalPvp;
+        },
+
+        formatEur(val) {
+            if (val === null || val === undefined || isNaN(val)) return '0,00';
+            return val.toLocaleString('es-ES', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+        },
+    };
+}
+</script>
+{% endblock %}

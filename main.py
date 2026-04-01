@@ -197,6 +197,32 @@ def products_page(request: Request):
         })
 
 
+@app.get("/calculadora", dependencies=[Depends(require_auth)])
+def calculadora_page(request: Request):
+    try:
+        products = get_all_products()
+        gold_price_info = get_gold_info()
+        return templates.TemplateResponse(name="calculadora.html", request=request, context={
+            "products": products,
+            "gold_price": gold_price_info,
+        })
+    except Exception as e:
+        return templates.TemplateResponse(name="calculadora.html", request=request, context={
+            "products": [],
+            "gold_price": get_gold_info(),
+            "error": str(e),
+        })
+
+
+@app.get("/api/products", dependencies=[Depends(require_auth)])
+def api_products():
+    try:
+        products = get_all_products()
+        return JSONResponse(products)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.get("/suppliers", dependencies=[Depends(require_auth)])
 def suppliers_page(request: Request):
     try:
