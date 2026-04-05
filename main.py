@@ -557,3 +557,30 @@ async def update_real_costs(order_id: str, request: Request):
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=PORT)
+
+
+@app.post("/api/fix-status-1900")
+def fix_status_1900():
+    """Fix: set orders >= #1900 to 'notificado' (except joyeros)."""
+    import datetime as _dt
+    conn = get_db()
+    now = _dt.datetime.now().isoformat()
+    orders = conn.execute(
+        "SELECT id, shopify_order_number, product_type FROM orders"
+    ).fetchall()
+    count = 0
+    for o in orders:
+        num_str = (o["shopify_order_number"] or "").replace("#", "").strip()
+        try:
+            num = int(num_str)
+        except ValueError:
+            continue
+        if num >= 1900 and (o["product_type"] or "joya") != "joyero":
+            conn.execute(
+                "UPDATE orders SET status='notificado', joya_terminada='0', joya_terminada_at=NULL, updated_at=? WHERE id=?",
+                (now, o["id"])
+            )
+            count += 1
+    conn.commit()
+    conn.close()
+    return JSONResponse({"ok": True, "fixed": count})
