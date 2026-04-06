@@ -554,13 +554,13 @@ async def update_real_costs(order_id: str, request: Request):
 
 @app.post("/api/fix-all-status")
 def fix_all_status():
-    """Reset ALL orders: joyeros→entregado, joya_terminada→entregado, rest→notificado."""
+    """Reset ALL orders: joyeros→entregado, joya_terminada→entregado, rest→nuevo."""
     import datetime as _dt
     conn = get_db()
     now = _dt.datetime.now().isoformat()
 
-    # Step 1: ALL orders → notificado (clean slate)
-    conn.execute("UPDATE orders SET status='notificado', updated_at=?", (now,))
+    # Step 1: ALL orders → nuevo (clean slate)
+    conn.execute("UPDATE orders SET status='nuevo', updated_at=?", (now,))
 
     # Step 2: Joyeros → entregado
     conn.execute(
