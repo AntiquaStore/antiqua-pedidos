@@ -554,25 +554,29 @@ async def update_real_costs(order_id: str, request: Request):
 
 @app.post("/api/fix-all-status")
 def fix_all_status():
-    """Reset ALL orders: joyeros→entregado, joya_terminada→entregado, rest→nuevo."""
+    """Fix status: <#1900 entregado, >=#1900 nuevo (except joyeros→entregado)."""
     import datetime as _dt
     conn = get_db()
     now = _dt.datetime.now().isoformat()
 
-    # Step 1: ALL orders → nuevo (clean slate)
-    conn.execute("UPDATE orders SET status='nuevo', updated_at=?", (now,))
+    orders = conn.execute("SELECT id, shopify_order_number, product_type, joya_terminada FROM orders").fetchall()
+    for o in orders:
+        num_str = (o["shopify_order_number"] or "").replace("#", "").strip()
+        try:
+            num = int(num_str)
+        except ValueError:
+            continue
 
-    # Step 2: Joyeros → entregado
-    conn.execute(
-        "UPDATE orders SET status='entregado', updated_at=? WHERE product_type='joyero'",
-        (now,)
-    )
+        if (o["product_type"] or "") == "joyero":
+            new_status = "entregado"
+        elif o["joya_terminada"] == "1":
+            new_status = "entregado"
+        elif num < 1900:
+            new_status = "entregado"
+        else:
+            new_status = "nuevo"
 
-    # Step 3: Orders where Barto marked joya_terminada → entregado
-    conn.execute(
-        "UPDATE orders SET status='entregado', updated_at=? WHERE joya_terminada='1'",
-        (now,)
-    )
+        conn.execute("UPDATE orders SET status=?, updated_at=? WHERE id=?", (new_status, now, o["id"]))
 
     conn.commit()
 
