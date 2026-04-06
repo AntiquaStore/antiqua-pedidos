@@ -226,7 +226,7 @@ def sync_from_api(full=False):
                 "pvp": pvp,
                 "is_partial_payment": "1" if partial else "0",
                 "payment_group": payment_group if partial else "",
-                "status": "completado" if order.get("created_at", "")[:10] < date.today().isoformat() else "nuevo",
+                "status": "notificado" if order.get("created_at", "")[:10] < date.today().isoformat() else "nuevo",
                 **estimates,
             }
             models.upsert_order(data)
@@ -297,7 +297,7 @@ def sync_from_csv(csv_path: str = None):
                 "pvp": pvp,
                 "is_partial_payment": "1" if partial else "0",
                 "payment_group": payment_group if partial else "",
-                "status": "completado" if fecha < date.today().isoformat() else "nuevo",
+                "status": "notificado" if fecha < date.today().isoformat() else "nuevo",
                 **estimates,
             }
             models.upsert_order(data)

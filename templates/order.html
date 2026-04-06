@@ -467,8 +467,8 @@
    ══════════════════════════════════════════════════════════════ #}
 {% set transitions = {
     'nuevo':      {'next': 'notificado', 'label': 'Notificar a taller'},
-    'notificado': {'next': 'entregado',  'label': 'Marcar como Entregado'},
-    'entregado':  {'next': 'completado', 'label': 'Marcar como Completado'}
+    'notificado': {'next': 'entregado',  'label': 'Recibido de taller'},
+    'entregado':  {'next': 'completado', 'label': 'Enviado al cliente'}
 } %}
 
 {% if order.status in transitions %}

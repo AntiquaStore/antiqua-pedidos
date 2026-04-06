@@ -145,7 +145,9 @@ def upsert_order(data: dict) -> int:
 
     cols = ", ".join(data.keys())
     placeholders = ", ".join(["?"] * len(data))
-    updates = ", ".join([f"{k}=excluded.{k}" for k in data if k not in ("shopify_order_id", "product_name", "created_at")])
+    # Don't overwrite status, joya_terminada, piedras_entregadas on re-sync (preserve manual state changes)
+    preserve_fields = ("shopify_order_id", "product_name", "created_at", "status", "joya_terminada", "joya_terminada_at", "piedras_entregadas", "piedras_entregadas_at")
+    updates = ", ".join([f"{k}=excluded.{k}" for k in data if k not in preserve_fields])
 
     sql = f"""
     INSERT INTO orders ({cols}) VALUES ({placeholders})

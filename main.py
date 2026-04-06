@@ -559,28 +559,41 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=PORT)
 
 
-@app.post("/api/fix-status-1900")
-def fix_status_1900():
-    """Fix: set orders >= #1900 to 'notificado' (except joyeros)."""
+@app.post("/api/fix-all-status")
+def fix_all_status():
+    """Reset all orders to correct status based on joya_terminada flag.
+    - joya_terminada='1' → entregado (Barto already delivered)
+    - joyero → entregado (doesn't go through workshop)
+    - everything else → notificado (in workshop, waiting for Barto)
+    """
     import datetime as _dt
     conn = get_db()
     now = _dt.datetime.now().isoformat()
-    orders = conn.execute(
-        "SELECT id, shopify_order_number, product_type FROM orders"
-    ).fetchall()
-    count = 0
-    for o in orders:
-        num_str = (o["shopify_order_number"] or "").replace("#", "").strip()
-        try:
-            num = int(num_str)
-        except ValueError:
-            continue
-        if num >= 1900 and (o["product_type"] or "joya") != "joyero":
-            conn.execute(
-                "UPDATE orders SET status='notificado', joya_terminada='0', joya_terminada_at=NULL, updated_at=? WHERE id=?",
-                (now, o["id"])
-            )
-            count += 1
+
+    # All joyeros → entregado
+    r1 = conn.execute(
+        "UPDATE orders SET status='entregado', updated_at=? WHERE product_type='joyero' AND status != 'entregado'",
+        (now,)
+    )
+
+    # Orders where Barto already marked joya_terminada → entregado
+    r2 = conn.execute(
+        "UPDATE orders SET status='entregado', updated_at=? WHERE joya_terminada='1' AND status != 'entregado' AND status != 'completado'",
+        (now,)
+    )
+
+    # Everything else that's 'completado' but NOT joya_terminada → back to notificado
+    r3 = conn.execute(
+        "UPDATE orders SET status='notificado', updated_at=? WHERE status='completado' AND (joya_terminada IS NULL OR joya_terminada != '1') AND COALESCE(product_type,'joya') != 'joyero'",
+        (now,)
+    )
+
     conn.commit()
+
+    # Count results
+    stats = {}
+    for status in ['nuevo', 'notificado', 'entregado', 'completado']:
+        stats[status] = conn.execute(f"SELECT COUNT(*) as c FROM orders WHERE status=?", (status,)).fetchone()["c"]
+
     conn.close()
-    return JSONResponse({"ok": True, "fixed": count})
+    return JSONResponse({"ok": True, "joyeros_fixed": r1.rowcount, "terminadas_fixed": r2.rowcount, "completados_reset": r3.rowcount, "status_counts": stats})
