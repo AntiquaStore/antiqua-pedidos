@@ -552,48 +552,39 @@ async def update_real_costs(order_id: str, request: Request):
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
-
-
 @app.post("/api/fix-all-status")
 def fix_all_status():
-    """Reset all orders to correct status based on joya_terminada flag.
-    - joya_terminada='1' → entregado (Barto already delivered)
-    - joyero → entregado (doesn't go through workshop)
-    - everything else → notificado (in workshop, waiting for Barto)
-    """
+    """Reset ALL orders: joyeros→entregado, joya_terminada→entregado, rest→notificado."""
     import datetime as _dt
     conn = get_db()
     now = _dt.datetime.now().isoformat()
 
-    # All joyeros → entregado
-    r1 = conn.execute(
-        "UPDATE orders SET status='entregado', updated_at=? WHERE product_type='joyero' AND status != 'entregado'",
+    # Step 1: ALL orders → notificado (clean slate)
+    conn.execute("UPDATE orders SET status='notificado', updated_at=?", (now,))
+
+    # Step 2: Joyeros → entregado
+    conn.execute(
+        "UPDATE orders SET status='entregado', updated_at=? WHERE product_type='joyero'",
         (now,)
     )
 
-    # Orders where Barto already marked joya_terminada → entregado
-    r2 = conn.execute(
-        "UPDATE orders SET status='entregado', updated_at=? WHERE joya_terminada='1' AND status != 'entregado' AND status != 'completado'",
-        (now,)
-    )
-
-    # Everything else that's 'completado' but NOT joya_terminada → back to notificado
-    r3 = conn.execute(
-        "UPDATE orders SET status='notificado', updated_at=? WHERE status='completado' AND (joya_terminada IS NULL OR joya_terminada != '1') AND COALESCE(product_type,'joya') != 'joyero'",
+    # Step 3: Orders where Barto marked joya_terminada → entregado
+    conn.execute(
+        "UPDATE orders SET status='entregado', updated_at=? WHERE joya_terminada='1'",
         (now,)
     )
 
     conn.commit()
 
-    # Count results
     stats = {}
-    for status in ['nuevo', 'notificado', 'entregado', 'completado']:
-        stats[status] = conn.execute(f"SELECT COUNT(*) as c FROM orders WHERE status=?", (status,)).fetchone()["c"]
+    for s in ['nuevo', 'notificado', 'entregado', 'completado']:
+        stats[s] = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status=?", (s,)).fetchone()["c"]
 
     conn.close()
-    return JSONResponse({"ok": True, "joyeros_fixed": r1.rowcount, "terminadas_fixed": r2.rowcount, "completados_reset": r3.rowcount, "status_counts": stats})
+    return JSONResponse({"ok": True, "status_counts": stats})
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
