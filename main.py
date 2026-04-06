@@ -587,6 +587,37 @@ def fix_all_status():
     conn.close()
     return JSONResponse({"ok": True, "status_counts": stats})
 
+@app.post("/api/set-status-range")
+def set_status_range(request: Request):
+    """Set status for a range of order numbers. Body: {from: 1900, to: 1908, status: 'notificado'}"""
+    import json, datetime as _dt
+    body = json.loads(request._receive.__self__._body.decode() if hasattr(request, '_receive') else '{}')
+    # Simpler: use query params
+    return JSONResponse({"error": "Use query params: ?from=1900&to=1908&status=notificado"})
+
+@app.get("/api/set-status-range")
+def set_status_range_get(request: Request, from_num: int = 0, to_num: int = 0, status: str = "notificado"):
+    """Set status for a range. GET /api/set-status-range?from_num=1900&to_num=1908&status=notificado"""
+    import datetime as _dt
+    if not from_num or not to_num or status not in ("nuevo", "notificado", "entregado", "completado"):
+        return JSONResponse({"error": "Params: from_num, to_num, status"}, status_code=400)
+    conn = get_db()
+    now = _dt.datetime.now().isoformat()
+    orders = conn.execute("SELECT id, shopify_order_number, product_type FROM orders").fetchall()
+    count = 0
+    for o in orders:
+        num_str = (o["shopify_order_number"] or "").replace("#", "").strip()
+        try:
+            num = int(num_str)
+        except ValueError:
+            continue
+        if from_num <= num <= to_num and (o["product_type"] or "joya") != "joyero":
+            conn.execute("UPDATE orders SET status=?, updated_at=? WHERE id=?", (status, now, o["id"]))
+            count += 1
+    conn.commit()
+    conn.close()
+    return JSONResponse({"ok": True, "updated": count, "status": status, "range": f"#{from_num}-#{to_num}"})
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------

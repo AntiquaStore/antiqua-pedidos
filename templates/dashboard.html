@@ -182,10 +182,10 @@
                 {% if orders %}
                     {% for order in orders %}
                     <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
-                        <td class="px-5 py-4 text-sm text-secondary">{{ order.shopify_order_number or order.id }}</td>
+                        <td class="px-5 py-4 text-sm"><a href="/order/{{ order.id }}" class="text-secondary hover:text-bronze transition-colors">{{ order.shopify_order_number or order.id }}</a></td>
                         <td class="px-5 py-4">
-                            <div class="text-sm font-medium text-dark">
-                                {{ order.product_name or '-' }}
+                            <div class="text-sm font-medium">
+                                <a href="/order/{{ order.id }}" class="text-dark hover:text-bronze transition-colors">{{ order.product_name or '-' }}</a>
                                 {% if order._payment_count is defined and order._payment_count > 1 %}
                                 <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-amber-100 text-amber-700 border border-amber-200">{{ order._payment_count }} pagos</span>
                                 {% elif order.is_partial_payment == '1' or order.is_partial_payment == 1 %}
