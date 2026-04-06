@@ -120,6 +120,39 @@ def on_startup():
     except Exception as e:
         print(f"Auto-import failed: {e}")
 
+    # ALWAYS fix statuses after sync (Render free tier wipes DB on redeploy)
+    try:
+        import datetime as _dt
+        conn = get_db()
+        now = _dt.datetime.now().isoformat()
+        orders = conn.execute("SELECT id, shopify_order_number, product_type, joya_terminada FROM orders").fetchall()
+        fixed = 0
+        for o in orders:
+            num_str = (o["shopify_order_number"] or "").replace("#", "").strip()
+            try:
+                num = int(num_str)
+            except ValueError:
+                continue
+
+            if (o["product_type"] or "") == "joyero":
+                new_status = "entregado"
+            elif o["joya_terminada"] == "1":
+                new_status = "entregado"
+            elif num < 1900:
+                new_status = "entregado"
+            elif 1900 <= num <= 1908:
+                new_status = "notificado"
+            else:
+                new_status = "nuevo"
+
+            conn.execute("UPDATE orders SET status=?, updated_at=? WHERE id=?", (new_status, now, o["id"]))
+            fixed += 1
+        conn.commit()
+        conn.close()
+        print(f"Auto-fixed {fixed} order statuses on startup")
+    except Exception as e:
+        print(f"Status fix failed: {e}")
+
 # ---------------------------------------------------------------------------
 # HTML Pages
 # ---------------------------------------------------------------------------
