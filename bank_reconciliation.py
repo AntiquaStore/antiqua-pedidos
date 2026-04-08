@@ -123,11 +123,15 @@ def categorize_entry(concepto, importe):
             return "saas"
         if "SHOPIFY*" in c or "SHOPIFY" in c:
             return "comision_shopify"
-        # Taller: antiqua + nov or NOVAO
-        if ("ANTIQUA" in c and "NOV" in c) or "NOVAO" in c:
+        # Taller: antiqua + nov/n (Novao payments often abbreviated)
+        if "NOVAO" in c:
             return "gasto_taller"
-        # Piedras: antiqua + lo or MAS GEMAS or antiqua + mas
-        if ("ANTIQUA" in c and "LO" in c) or "MAS GEMAS" in c or ("ANTIQUA" in c and "MAS" in c):
+        if "ANTIQUA" in c and ("NOV" in c or c.rstrip().endswith("N") or " N" in c):
+            return "gasto_taller"
+        # Piedras: antiqua + lo/ma (Lola / Mas Gemas payments)
+        if "MAS GEMAS" in c:
+            return "gasto_piedras"
+        if "ANTIQUA" in c and ("LO" in c or " MA" in c or c.rstrip().endswith("MA")):
             return "gasto_piedras"
         if "NEGUERUEL" in c:
             return "gasto_piedras"
@@ -143,6 +147,24 @@ def categorize_entry(concepto, importe):
             return "comision_paypal"
         if "REBUNDLE" in c:
             return "formacion"
+        # Traspasos internos entre cuentas
+        if "TRANSF. INSTANTANEA" in c or "TRANSF. A SU FAVOR" in c:
+            return "traspaso_interno"
+        if "TRF.INTERNACIONAL" in c:
+            return "transferencia_internacional"
+        if "SERV. EM. TRANSF" in c:
+            return "comision_transferencia"
+        # Martin Valentin, Jose Cruz, Jose Alvarez = pagos a proveedores varios
+        if "JOSE MANUEL ALVAR" in c or "JOSE M ALVAREZ" in c:
+            return "gasto_taller"  # Joyero Jose Manuel
+        if "JOSE LUIZ CRUZ" in c or "JOSE LUI" in c:
+            return "gasto_taller"
+        if "FOKKELMAN" in c:
+            return "gasto_piedras"  # Gemologist
+        if "FOTOCASION" in c or "REVELADO" in c or "JHULIEN" in c:
+            return "fotografia"
+        if "DIRECTORIO" in c or "CERTIFICADO" in c:
+            return "otro_gasto"
         return "otro_gasto"
 
 

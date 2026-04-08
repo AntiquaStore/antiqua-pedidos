@@ -655,6 +655,16 @@ def set_status_range_get(request: Request, from_num: int = 0, to_num: int = 0, s
     conn.close()
     return JSONResponse({"ok": True, "updated": count, "status": status, "range": f"#{from_num}-#{to_num}"})
 
+@app.post("/api/bank/reset")
+def reset_bank_entries():
+    """Delete all bank entries so we can re-import with corrected categorization."""
+    conn = get_db()
+    conn.execute("DELETE FROM bank_entries")
+    conn.commit()
+    count = conn.execute("SELECT changes()").fetchone()[0]
+    conn.close()
+    return JSONResponse({"ok": True, "deleted": count})
+
 # ---------------------------------------------------------------------------
 # Contabilidad (Accounting)
 # ---------------------------------------------------------------------------

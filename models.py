@@ -681,7 +681,7 @@ def get_accounting_stats(month=None, from_month=None, to_month=None):
     total_ingresos = ingresos_shopify + ingresos_transferencia + ingresos_paypal + ingresos_efectivo
 
     gastos_taller = _sum_bank_abs("categoria IN ('gasto_taller', 'gasto_piedras') AND importe < 0")
-    gastos_fijos = _sum_bank_abs("categoria IN ('alquiler', 'saas', 'packaging', 'otro_gasto', 'telefonia', 'envios', 'asesoria', 'formacion') AND importe < 0")
+    gastos_fijos = _sum_bank_abs("categoria IN ('alquiler', 'saas', 'packaging', 'otro_gasto', 'telefonia', 'envios', 'asesoria', 'formacion', 'fotografia', 'comision_transferencia') AND importe < 0")
     gastos_nominas = _sum_bank_abs("categoria IN ('nomina', 'seguridad_social') AND importe < 0")
     gastos_publicidad = _sum_bank_abs("categoria='publicidad' AND importe < 0")
     gastos_impuestos = _sum_bank_abs("categoria='impuestos' AND importe < 0")
