@@ -107,6 +107,80 @@
         </div>
     </div>
 
+    <!-- CONCILIACION SHOPIFY vs BANCO -->
+    <h2 class="text-lg text-dark mb-3" style="font-family: 'Libre Baskerville', serif;">Conciliaci&oacute;n Shopify vs Banco</h2>
+    <div class="bg-white border border-line mb-8 overflow-hidden">
+        <table class="w-full">
+            <tbody>
+                <tr class="border-b border-line">
+                    <td class="px-5 py-3 text-sm text-dark font-medium">Ventas registradas en Shopify</td>
+                    <td class="px-5 py-3 text-sm text-dark text-right tabular-nums font-semibold">{{ "{:,.2f}".format(stats.ventas_shopify or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</td>
+                </tr>
+                <tr class="border-b border-line">
+                    <td class="px-5 py-3 text-sm text-secondary">Shopify Payouts recibidos en banco</td>
+                    <td class="px-5 py-3 text-sm text-dark text-right tabular-nums">{{ "{:,.2f}".format(stats.ingresos_shopify or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</td>
+                </tr>
+                <tr class="border-b border-line">
+                    <td class="px-5 py-3 text-sm text-secondary">Transferencias directas clientes (&ge;600&euro;)</td>
+                    <td class="px-5 py-3 text-sm text-dark text-right tabular-nums">{{ "{:,.2f}".format(stats.ingresos_transferencia or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</td>
+                </tr>
+                <tr class="border-b border-line bg-[#f8f7f5]">
+                    <td class="px-5 py-3 text-sm text-dark font-medium">Total cobrado en banco</td>
+                    <td class="px-5 py-3 text-sm text-dark text-right tabular-nums font-semibold">{{ "{:,.2f}".format(stats.total_cobrado_banco or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</td>
+                </tr>
+                <tr>
+                    {% set desv = stats.desviacion or 0 %}
+                    <td class="px-5 py-4 text-sm font-semibold {{ 'text-[#4a7c59]' if desv >= 0 else 'text-red-600' }}">Desviaci&oacute;n</td>
+                    <td class="px-5 py-4 text-right tabular-nums font-bold text-lg {{ 'text-[#4a7c59]' if desv >= 0 else 'text-red-600' }}">
+                        {{ "{:+,.2f}".format(desv)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- DESGLOSE DE GASTOS -->
+    <h2 class="text-lg text-dark mb-3" style="font-family: 'Libre Baskerville', serif;">Desglose de gastos</h2>
+    <div class="bg-white border border-line mb-8 overflow-hidden">
+        <table class="w-full">
+            <thead>
+                <tr class="bg-[#f8f7f5] border-b border-line">
+                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-5 py-3">Categor&iacute;a</th>
+                    <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-5 py-3">Importe</th>
+                    <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-5 py-3">% del total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set tg = stats.total_gastos or 1 %}
+                {% set gastos_list = [
+                    ('Taller + Piedras (Barto + Lola)', stats.gastos_taller or 0),
+                    ('N&oacute;minas + Seg. Social', stats.gastos_nominas or 0),
+                    ('Publicidad (Meta)', stats.gastos_publicidad or 0),
+                    ('Impuestos (AEAT)', stats.gastos_impuestos or 0),
+                    ('Comisiones (Shopify + PayPal)', stats.gastos_comisiones or 0),
+                    ('Gastos fijos (SaaS, telefon&iacute;a, env&iacute;os, etc.)', stats.gastos_fijos or 0),
+                ] %}
+                {% for nombre, valor in gastos_list %}
+                <tr class="border-b border-line hover:bg-[#faf9f7]">
+                    <td class="px-5 py-3 text-sm text-dark">{{ nombre }}</td>
+                    <td class="px-5 py-3 text-sm text-dark text-right tabular-nums">{{ "{:,.2f}".format(valor)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</td>
+                    <td class="px-5 py-3 text-sm text-secondary text-right tabular-nums">{{ "%.1f"|format(valor / tg * 100 if tg > 0 else 0) }}%</td>
+                </tr>
+                {% endfor %}
+                <tr class="bg-[#f8f7f5]">
+                    <td class="px-5 py-3 text-sm text-dark font-semibold">TOTAL GASTOS</td>
+                    <td class="px-5 py-3 text-sm text-dark text-right tabular-nums font-semibold">{{ "{:,.2f}".format(stats.total_gastos or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</td>
+                    <td class="px-5 py-3 text-sm text-dark text-right font-semibold">100%</td>
+                </tr>
+            </tbody>
+        </table>
+        {% if stats.gastos_traspasos and stats.gastos_traspasos > 0 %}
+        <div class="px-5 py-2 text-xs text-secondary border-t border-line bg-[#faf9f7]">
+            Nota: {{ "{:,.2f}".format(stats.gastos_traspasos)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro; en traspasos internos entre cuentas (no incluidos en gastos)
+        </div>
+        {% endif %}
+    </div>
+
     <!-- Section: Conciliación banco -->
     <h2 class="text-lg text-dark mb-4" style="font-family: 'Libre Baskerville', serif;">Conciliaci&oacute;n bancaria</h2>
 

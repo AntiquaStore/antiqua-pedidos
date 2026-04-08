@@ -687,8 +687,25 @@ def get_accounting_stats(month=None, from_month=None, to_month=None):
     gastos_impuestos = _sum_bank_abs("categoria='impuestos' AND importe < 0")
     gastos_comisiones = _sum_bank_abs("categoria IN ('comision_shopify', 'comision_paypal') AND importe < 0")
 
+    gastos_traspasos = _sum_bank_abs("categoria IN ('traspaso_interno', 'transferencia_internacional') AND importe < 0")
+
     total_gastos = gastos_taller + gastos_fijos + gastos_nominas + gastos_publicidad + gastos_impuestos + gastos_comisiones
     resultado = total_ingresos - total_gastos
+
+    # Shopify orders total (from orders table, not bank)
+    ventas_shopify = conn.execute(
+        "SELECT COALESCE(SUM(pvp), 0) as s FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ?",
+        (date_start, date_end)
+    ).fetchone()["s"]
+
+    # Bank ingresos >= 600 (real sales, not arreglos)
+    ingresos_ventas_banco = _sum_bank("importe >= 600 AND importe > 0 AND categoria NOT IN ('shopify_payout')")
+    # Shopify payouts = what Shopify actually sent to bank
+    ingresos_shopify_payouts = ingresos_shopify  # already calculated above
+
+    # Desviacion: ventas en Shopify vs lo recibido en banco (payouts + transferencias de ventas)
+    total_cobrado_banco = ingresos_shopify_payouts + ingresos_ventas_banco
+    desviacion = total_cobrado_banco - ventas_shopify
 
     conn.close()
     return {
@@ -705,8 +722,12 @@ def get_accounting_stats(month=None, from_month=None, to_month=None):
         "gastos_publicidad": gastos_publicidad,
         "gastos_impuestos": gastos_impuestos,
         "gastos_comisiones": gastos_comisiones,
+        "gastos_traspasos": gastos_traspasos,
         "total_gastos": total_gastos,
         "resultado": resultado,
+        "ventas_shopify": ventas_shopify,
+        "total_cobrado_banco": total_cobrado_banco,
+        "desviacion": desviacion,
     }
 
 
