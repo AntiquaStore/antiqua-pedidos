@@ -68,11 +68,11 @@
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <div class="bg-white border border-line p-5">
             <p class="text-2xl font-bold text-dark tabular-nums" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.2f}".format(stats.ingresos_shopify or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</p>
-            <p class="text-sm text-secondary mt-1 tracking-wide">Ingresos Shopify</p>
+            <p class="text-sm text-secondary mt-1 tracking-wide">Shopify Payouts (neto banco)</p>
         </div>
         <div class="bg-white border border-line p-5">
             <p class="text-2xl font-bold text-dark tabular-nums" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.2f}".format(stats.ingresos_transferencia or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</p>
-            <p class="text-sm text-secondary mt-1 tracking-wide">Ingresos transferencias</p>
+            <p class="text-sm text-secondary mt-1 tracking-wide">Transferencias clientes (neto banco)</p>
         </div>
         <div class="bg-white border border-line p-5">
             <p class="text-2xl font-bold text-dark tabular-nums" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.2f}".format(stats.ingresos_paypal or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</p>
@@ -88,7 +88,7 @@
         </div>
         <div class="bg-white border border-line p-5">
             <p class="text-2xl font-bold text-[#4a7c59] tabular-nums" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.2f}".format(stats.total_ingresos or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</p>
-            <p class="text-sm text-secondary mt-1 tracking-wide">Total ingresos</p>
+            <p class="text-sm text-secondary mt-1 tracking-wide">Total ingresos (neto banco + efectivo)</p>
         </div>
         <div class="bg-white border border-line p-5">
             <p class="text-2xl font-bold text-red-600 tabular-nums" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.2f}".format(stats.total_gastos or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</p>
@@ -163,11 +163,11 @@
                 {% set tg = stats.total_gastos or 1 %}
                 {% set gastos_list = [
                     ('Taller + Piedras (Barto + Lola)', stats.gastos_taller or 0),
-                    ('N&oacute;minas + Seg. Social', stats.gastos_nominas or 0),
+                    ('Nominas + Seg. Social', stats.gastos_nominas or 0),
                     ('Publicidad (Meta)', stats.gastos_publicidad or 0),
                     ('Impuestos (AEAT)', stats.gastos_impuestos or 0),
                     ('Comisiones (Shopify + PayPal)', stats.gastos_comisiones or 0),
-                    ('Gastos fijos (SaaS, telefon&iacute;a, env&iacute;os, etc.)', stats.gastos_fijos or 0),
+                    ('Gastos fijos (SaaS, telefonia, envios, etc.)', stats.gastos_fijos or 0),
                 ] %}
                 {% for nombre, valor in gastos_list %}
                 <tr class="border-b border-line hover:bg-[#faf9f7]">

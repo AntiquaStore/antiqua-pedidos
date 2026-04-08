@@ -668,6 +668,7 @@ def get_accounting_stats(month=None, from_month=None, to_month=None):
         sql = f"SELECT COALESCE(SUM(ABS(importe)), 0) as s FROM bank_entries WHERE fecha >= ? AND fecha < ? AND ({where_clause})"
         return conn.execute(sql, [date_start, date_end]).fetchone()["s"]
 
+    # Ingresos reales en banco (neto, lo que entra en la cuenta)
     ingresos_shopify = _sum_bank("categoria='shopify_payout' AND importe > 0")
     ingresos_transferencia = _sum_bank("categoria='transferencia_cliente' AND importe > 0")
     ingresos_paypal = _sum_bank("categoria='paypal' AND importe > 0")
