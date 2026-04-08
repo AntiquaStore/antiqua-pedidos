@@ -121,8 +121,12 @@
                     <td class="px-5 py-3 text-sm text-dark text-right tabular-nums">{{ "{:,.2f}".format(stats.ingresos_shopify or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</td>
                 </tr>
                 <tr class="border-b border-line">
-                    <td class="px-5 py-3 text-sm text-secondary">Transferencias directas clientes (&ge;600&euro;)</td>
+                    <td class="px-5 py-3 text-sm text-secondary">Transferencias directas clientes</td>
                     <td class="px-5 py-3 text-sm text-dark text-right tabular-nums">{{ "{:,.2f}".format(stats.ingresos_transferencia or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</td>
+                </tr>
+                <tr class="border-b border-line">
+                    <td class="px-5 py-3 text-sm text-secondary">PayPal</td>
+                    <td class="px-5 py-3 text-sm text-dark text-right tabular-nums">{{ "{:,.2f}".format(stats.ingresos_paypal or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</td>
                 </tr>
                 <tr class="border-b border-line bg-[#f8f7f5]">
                     <td class="px-5 py-3 text-sm text-dark font-medium">Total cobrado en banco</td>
@@ -130,7 +134,12 @@
                 </tr>
                 <tr>
                     {% set desv = stats.desviacion or 0 %}
-                    <td class="px-5 py-4 text-sm font-semibold {{ 'text-[#4a7c59]' if desv >= 0 else 'text-red-600' }}">Desviaci&oacute;n</td>
+                    <td class="px-5 py-4 text-sm font-semibold {{ 'text-[#4a7c59]' if desv >= 0 else 'text-red-600' }}">
+                        Diferencia (PVP Shopify - cobrado banco)
+                        <span class="block text-xs font-normal text-secondary mt-0.5">
+                            {% if desv > 0 %}Pendiente de cobro o comisiones{% elif desv < 0 %}Mas cobrado que vendido (cobros de otros periodos){% else %}Cuadrado{% endif %}
+                        </span>
+                    </td>
                     <td class="px-5 py-4 text-right tabular-nums font-bold text-lg {{ 'text-[#4a7c59]' if desv >= 0 else 'text-red-600' }}">
                         {{ "{:+,.2f}".format(desv)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;
                     </td>

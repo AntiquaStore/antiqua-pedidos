@@ -698,14 +698,18 @@ def get_accounting_stats(month=None, from_month=None, to_month=None):
         (date_start, date_end)
     ).fetchone()["s"]
 
-    # Bank ingresos >= 600 (real sales, not arreglos)
-    ingresos_ventas_banco = _sum_bank("importe >= 600 AND importe > 0 AND categoria NOT IN ('shopify_payout')")
-    # Shopify payouts = what Shopify actually sent to bank
-    ingresos_shopify_payouts = ingresos_shopify  # already calculated above
+    # Total ingresos en banco (todos los positivos, excluyendo shopify payouts que ya se cuentan)
+    ingresos_transferencias_banco = _sum_bank("categoria='transferencia_cliente' AND importe > 0")
+    ingresos_paypal_banco = _sum_bank("categoria='paypal' AND importe > 0")
 
-    # Desviacion: ventas en Shopify vs lo recibido en banco (payouts + transferencias de ventas)
-    total_cobrado_banco = ingresos_shopify_payouts + ingresos_ventas_banco
-    desviacion = total_cobrado_banco - ventas_shopify
+    # Total cobrado = shopify payouts + transferencias + paypal (lo que realmente entra en banco por ventas)
+    total_cobrado_banco = ingresos_shopify + ingresos_transferencias_banco + ingresos_paypal_banco
+
+    # Comisiones Shopify = diferencia entre PVP de pedidos SP y lo que llega al banco
+    # Desviacion = ventas Shopify - (cobrado en banco + comisiones)
+    # Si es positiva = hay dinero pendiente de cobrar
+    # Si es negativa = hay mas cobrado que vendido (transferencias de otros periodos)
+    desviacion = ventas_shopify - total_cobrado_banco
 
     conn.close()
     return {
