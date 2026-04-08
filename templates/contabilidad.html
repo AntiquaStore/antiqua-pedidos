@@ -25,24 +25,44 @@
     </div>
     {% endif %}
 
-    <!-- Month selector -->
+    <!-- Period selector -->
     <form method="GET" action="/contabilidad" class="bg-white border border-line p-4 mb-6">
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <label class="text-xs uppercase tracking-wider text-secondary font-semibold">Mes</label>
-            <input type="month" name="month"
-                   value="{{ current_month }}"
+            <label class="text-xs uppercase tracking-wider text-secondary font-semibold">Desde</label>
+            <input type="month" name="from_month"
+                   value="{{ from_month }}"
+                   class="border border-line px-3 py-2 text-sm text-dark bg-white focus:outline-none focus:border-taupe"
+                   style="border-radius: 0;">
+            <label class="text-xs uppercase tracking-wider text-secondary font-semibold">Hasta</label>
+            <input type="month" name="to_month"
+                   value="{{ to_month }}"
                    class="border border-line px-3 py-2 text-sm text-dark bg-white focus:outline-none focus:border-taupe"
                    style="border-radius: 0;">
             <button type="submit"
                     class="px-5 py-2 bg-dark text-white text-xs uppercase tracking-widest font-semibold hover:bg-secondary transition-colors"
                     style="border-radius: 0;">
-                Ver mes
+                Ver periodo
             </button>
+            <a href="/contabilidad?from_month=2026-01&amp;to_month=2026-12"
+               class="px-4 py-2 text-xs uppercase tracking-widest text-secondary hover:text-dark border border-line hover:border-taupe transition-colors text-center"
+               style="border-radius: 0;">
+                Todo 2026
+            </a>
+            <a href="/contabilidad"
+               class="px-4 py-2 text-xs uppercase tracking-widest text-secondary hover:text-dark transition-colors text-center">
+                Mes actual
+            </a>
         </div>
     </form>
 
     <!-- KPI Cards -->
-    <h2 class="text-lg text-dark mb-3" style="font-family: 'Libre Baskerville', serif;">Resumen del mes</h2>
+    <h2 class="text-lg text-dark mb-3" style="font-family: 'Libre Baskerville', serif;">
+        {% if from_month == to_month %}
+            Resumen de {{ from_month }}
+        {% else %}
+            Resumen {{ from_month }} a {{ to_month }}
+        {% endif %}
+    </h2>
 
     <!-- Row 1: Ingresos -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">

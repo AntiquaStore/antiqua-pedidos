@@ -659,28 +659,38 @@ def set_status_range_get(request: Request, from_num: int = 0, to_num: int = 0, s
 # Contabilidad (Accounting)
 # ---------------------------------------------------------------------------
 @app.get("/contabilidad", dependencies=[Depends(require_auth)])
-def contabilidad_page(request: Request, month: str = None):
+def contabilidad_page(request: Request, from_month: str = None, to_month: str = None, month: str = None):
     try:
-        if not month:
-            month = datetime.now().strftime("%Y-%m")
-        acc_stats = get_accounting_stats(month)
-        entries = get_bank_entries(month=month)
-        cash = get_cash_sales(month=month)
+        # Support old ?month= param and new ?from_month=&to_month= params
+        if month and not from_month:
+            from_month = month
+            to_month = month
+        if not from_month:
+            from_month = datetime.now().strftime("%Y-%m")
+        if not to_month:
+            to_month = from_month
+
+        acc_stats = get_accounting_stats(from_month=from_month, to_month=to_month)
+        entries = get_bank_entries(from_month=from_month, to_month=to_month)
+        cash = get_cash_sales(from_month=from_month, to_month=to_month)
         gold_price_info = get_gold_info()
         return templates.TemplateResponse(name="contabilidad.html", request=request, context={
             "stats": acc_stats,
             "entries": entries,
             "cash_sales": cash,
             "gold_price": gold_price_info,
-            "current_month": month,
+            "from_month": from_month,
+            "to_month": to_month,
         })
     except Exception as e:
+        now = datetime.now().strftime("%Y-%m")
         return templates.TemplateResponse(name="contabilidad.html", request=request, context={
             "stats": {},
             "entries": [],
             "cash_sales": [],
             "gold_price": get_gold_info(),
-            "current_month": month or datetime.now().strftime("%Y-%m"),
+            "from_month": from_month or now,
+            "to_month": to_month or now,
             "error": str(e),
         })
 

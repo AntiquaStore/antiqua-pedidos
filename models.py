@@ -559,11 +559,21 @@ def insert_bank_entry(data: dict) -> int:
     return entry_id
 
 
-def get_bank_entries(month=None, categoria=None, unmatched_only=False):
+def get_bank_entries(month=None, from_month=None, to_month=None, categoria=None, unmatched_only=False):
     conn = get_db()
     sql = "SELECT * FROM bank_entries WHERE 1=1"
     params = []
-    if month:
+    if from_month and to_month:
+        sql += " AND fecha >= ? AND fecha < ?"
+        params.append(f"{from_month}-01")
+        # Add 1 month to to_month for < comparison
+        y, m = int(to_month[:4]), int(to_month[5:7])
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+        params.append(f"{y}-{m:02d}-01")
+    elif month:
         sql += " AND fecha LIKE ?"
         params.append(f"{month}%")
     if categoria:
@@ -597,11 +607,20 @@ def insert_cash_sale(data: dict) -> int:
     return sale_id
 
 
-def get_cash_sales(month=None):
+def get_cash_sales(month=None, from_month=None, to_month=None):
     conn = get_db()
     sql = "SELECT * FROM cash_sales WHERE 1=1"
     params = []
-    if month:
+    if from_month and to_month:
+        sql += " AND fecha >= ? AND fecha < ?"
+        params.append(f"{from_month}-01")
+        y, m = int(to_month[:4]), int(to_month[5:7])
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+        params.append(f"{y}-{m:02d}-01")
+    elif month:
         sql += " AND fecha LIKE ?"
         params.append(f"{month}%")
     sql += " ORDER BY fecha DESC, id DESC"
@@ -618,47 +637,63 @@ def delete_cash_sale(sale_id: int):
 
 
 # ── Accounting stats ──
-def get_accounting_stats(month=None):
+def get_accounting_stats(month=None, from_month=None, to_month=None):
     import datetime as _dt
-    if not month:
-        month = _dt.date.today().strftime("%Y-%m")
+    if not from_month:
+        if month:
+            from_month = month
+            to_month = month
+        else:
+            from_month = _dt.date.today().strftime("%Y-%m")
+            to_month = from_month
+    if not to_month:
+        to_month = from_month
+
+    # Build date range: from_month-01 to (to_month + 1 month)-01
+    date_start = f"{from_month}-01"
+    y, m = int(to_month[:4]), int(to_month[5:7])
+    m += 1
+    if m > 12:
+        m = 1
+        y += 1
+    date_end = f"{y}-{m:02d}-01"
 
     conn = get_db()
 
-    def _sum_bank(where_clause, params=None):
-        sql = f"SELECT COALESCE(SUM(importe), 0) as s FROM bank_entries WHERE fecha LIKE ? AND ({where_clause})"
-        all_params = [f"{month}%"] + (params or [])
-        return conn.execute(sql, all_params).fetchone()["s"]
+    def _sum_bank(where_clause):
+        sql = f"SELECT COALESCE(SUM(importe), 0) as s FROM bank_entries WHERE fecha >= ? AND fecha < ? AND ({where_clause})"
+        return conn.execute(sql, [date_start, date_end]).fetchone()["s"]
 
-    def _sum_bank_abs(where_clause, params=None):
-        sql = f"SELECT COALESCE(SUM(ABS(importe)), 0) as s FROM bank_entries WHERE fecha LIKE ? AND ({where_clause})"
-        all_params = [f"{month}%"] + (params or [])
-        return conn.execute(sql, all_params).fetchone()["s"]
+    def _sum_bank_abs(where_clause):
+        sql = f"SELECT COALESCE(SUM(ABS(importe)), 0) as s FROM bank_entries WHERE fecha >= ? AND fecha < ? AND ({where_clause})"
+        return conn.execute(sql, [date_start, date_end]).fetchone()["s"]
 
     ingresos_shopify = _sum_bank("categoria='shopify_payout' AND importe > 0")
     ingresos_transferencia = _sum_bank("categoria='transferencia_cliente' AND importe > 0")
     ingresos_paypal = _sum_bank("categoria='paypal' AND importe > 0")
 
     cash_row = conn.execute(
-        "SELECT COALESCE(SUM(importe), 0) as s FROM cash_sales WHERE fecha LIKE ?",
-        (f"{month}%",)
+        "SELECT COALESCE(SUM(importe), 0) as s FROM cash_sales WHERE fecha >= ? AND fecha < ?",
+        (date_start, date_end)
     ).fetchone()
     ingresos_efectivo = cash_row["s"]
 
     total_ingresos = ingresos_shopify + ingresos_transferencia + ingresos_paypal + ingresos_efectivo
 
     gastos_taller = _sum_bank_abs("categoria IN ('gasto_taller', 'gasto_piedras') AND importe < 0")
-    gastos_fijos = _sum_bank_abs("categoria IN ('alquiler', 'saas', 'packaging', 'otro_gasto') AND importe < 0")
-    gastos_nominas = _sum_bank_abs("categoria='nomina' AND importe < 0")
+    gastos_fijos = _sum_bank_abs("categoria IN ('alquiler', 'saas', 'packaging', 'otro_gasto', 'telefonia', 'envios', 'asesoria', 'formacion') AND importe < 0")
+    gastos_nominas = _sum_bank_abs("categoria IN ('nomina', 'seguridad_social') AND importe < 0")
     gastos_publicidad = _sum_bank_abs("categoria='publicidad' AND importe < 0")
     gastos_impuestos = _sum_bank_abs("categoria='impuestos' AND importe < 0")
+    gastos_comisiones = _sum_bank_abs("categoria IN ('comision_shopify', 'comision_paypal') AND importe < 0")
 
-    total_gastos = gastos_taller + gastos_fijos + gastos_nominas + gastos_publicidad + gastos_impuestos
+    total_gastos = gastos_taller + gastos_fijos + gastos_nominas + gastos_publicidad + gastos_impuestos + gastos_comisiones
     resultado = total_ingresos - total_gastos
 
     conn.close()
     return {
-        "month": month,
+        "from_month": from_month,
+        "to_month": to_month,
         "ingresos_shopify": ingresos_shopify,
         "ingresos_transferencia": ingresos_transferencia,
         "ingresos_paypal": ingresos_paypal,
@@ -669,6 +704,7 @@ def get_accounting_stats(month=None):
         "gastos_nominas": gastos_nominas,
         "gastos_publicidad": gastos_publicidad,
         "gastos_impuestos": gastos_impuestos,
+        "gastos_comisiones": gastos_comisiones,
         "total_gastos": total_gastos,
         "resultado": resultado,
     }
