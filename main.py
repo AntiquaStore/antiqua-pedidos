@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import uvicorn
-from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi import FastAPI, Request, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +18,11 @@ from models import (
     log_activity, get_activity, get_dashboard_stats,
     get_supplier_summary, get_setting, set_setting, get_all_products,
     get_supplier_orders, mark_piedras_entregadas, mark_joya_terminada,
+    insert_bank_entry, get_bank_entries, update_bank_entry,
+    insert_cash_sale, get_cash_sales, delete_cash_sale,
+    get_accounting_stats,
 )
+from bank_reconciliation import parse_bank_csv, categorize_entry, match_with_orders
 from catalog import load_catalog, estimate_costs
 from shopify_client import sync_from_api, sync_from_csv
 from excel_sync import export_order_to_excel, import_excel_to_db, export_all_to_excel
@@ -650,6 +654,109 @@ def set_status_range_get(request: Request, from_num: int = 0, to_num: int = 0, s
     conn.commit()
     conn.close()
     return JSONResponse({"ok": True, "updated": count, "status": status, "range": f"#{from_num}-#{to_num}"})
+
+# ---------------------------------------------------------------------------
+# Contabilidad (Accounting)
+# ---------------------------------------------------------------------------
+@app.get("/contabilidad", dependencies=[Depends(require_auth)])
+def contabilidad_page(request: Request, month: str = None):
+    try:
+        if not month:
+            month = datetime.now().strftime("%Y-%m")
+        acc_stats = get_accounting_stats(month)
+        entries = get_bank_entries(month=month)
+        cash = get_cash_sales(month=month)
+        gold_price_info = get_gold_info()
+        return templates.TemplateResponse(name="contabilidad.html", request=request, context={
+            "stats": acc_stats,
+            "entries": entries,
+            "cash_sales": cash,
+            "gold_price": gold_price_info,
+            "current_month": month,
+        })
+    except Exception as e:
+        return templates.TemplateResponse(name="contabilidad.html", request=request, context={
+            "stats": {},
+            "entries": [],
+            "cash_sales": [],
+            "gold_price": get_gold_info(),
+            "current_month": month or datetime.now().strftime("%Y-%m"),
+            "error": str(e),
+        })
+
+
+@app.post("/api/bank/upload", dependencies=[Depends(require_auth)])
+async def upload_bank_csv(request: Request, file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        parsed = parse_bank_csv(content)
+
+        # Categorize each entry
+        for entry in parsed:
+            entry["categoria"] = categorize_entry(entry.get("concepto", ""), entry.get("importe", 0))
+
+        # Match with existing orders
+        orders = get_all_orders()
+        parsed = match_with_orders(parsed, orders)
+
+        # Insert into DB
+        count = 0
+        for entry in parsed:
+            insert_bank_entry(entry)
+            count += 1
+
+        # Get updated stats for the month of the first entry
+        month = None
+        if parsed:
+            month = parsed[0].get("fecha", "")[:7]
+        acc_stats = get_accounting_stats(month)
+
+        return JSONResponse({"ok": True, "count": count, "stats": acc_stats})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/bank/{entry_id}/categorize", dependencies=[Depends(require_auth)])
+async def categorize_bank_entry(request: Request, entry_id: int):
+    try:
+        data = await request.json()
+        categoria = data.get("categoria", "")
+        notas = data.get("notas")
+        update_data = {"categoria": categoria}
+        if notas is not None:
+            update_data["notas"] = notas
+        update_bank_entry(entry_id, update_data)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/cash-sales", dependencies=[Depends(require_auth)])
+async def add_cash_sale(request: Request):
+    try:
+        form = await request.form()
+        data = {
+            "fecha": form.get("fecha", ""),
+            "cliente": form.get("cliente", ""),
+            "producto": form.get("producto", ""),
+            "importe": float(form.get("importe", 0)),
+            "notas": form.get("notas", ""),
+        }
+        insert_cash_sale(data)
+        month = data["fecha"][:7] if data["fecha"] else ""
+        return RedirectResponse(f"/contabilidad?month={month}", status_code=302)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.delete("/api/cash-sales/{sale_id}", dependencies=[Depends(require_auth)])
+def delete_cash_sale_route(request: Request, sale_id: int):
+    try:
+        delete_cash_sale(sale_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
 
 # ---------------------------------------------------------------------------
 # Main

@@ -120,6 +120,54 @@ def init_db():
     # Migrate: unify en_taller → notificado (single workshop status)
     conn.execute("UPDATE orders SET status='notificado' WHERE status='en_taller'")
 
+    # ── Accounting tables ──
+    conn.executescript("""
+    CREATE TABLE IF NOT EXISTS bank_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        concepto TEXT,
+        fecha TEXT,
+        importe REAL,
+        saldo REAL,
+        tipo TEXT DEFAULT 'ingreso',
+        categoria TEXT,
+        matched_order_id INTEGER,
+        matched_invoice_id INTEGER,
+        notas TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        proveedor TEXT,
+        fecha TEXT,
+        total REAL,
+        archivo_path TEXT,
+        concepto TEXT,
+        estado TEXT DEFAULT 'pendiente',
+        notas TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS invoice_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER REFERENCES invoices(id),
+        order_id INTEGER,
+        descripcion TEXT,
+        importe REAL,
+        matched INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS cash_sales (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT,
+        cliente TEXT,
+        producto TEXT,
+        importe REAL,
+        notas TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+    """)
+
     conn.commit()
     conn.close()
 
@@ -497,6 +545,133 @@ def mark_joya_terminada(order_id: int):
     log_activity(order_id, "Joya terminada por Barto",
                  f"Oro 24K: {real_gold:.2f} EUR/gr x {peso_est:.1f}gr = {oro_real:.2f} EUR")
     log_activity(order_id, "Estado cambiado a entregado")
+
+
+# ── Bank entries CRUD ──
+def insert_bank_entry(data: dict) -> int:
+    conn = get_db()
+    cols = ", ".join(data.keys())
+    placeholders = ", ".join(["?"] * len(data))
+    cur = conn.execute(f"INSERT INTO bank_entries ({cols}) VALUES ({placeholders})", list(data.values()))
+    conn.commit()
+    entry_id = cur.lastrowid
+    conn.close()
+    return entry_id
+
+
+def get_bank_entries(month=None, categoria=None, unmatched_only=False):
+    conn = get_db()
+    sql = "SELECT * FROM bank_entries WHERE 1=1"
+    params = []
+    if month:
+        sql += " AND fecha LIKE ?"
+        params.append(f"{month}%")
+    if categoria:
+        sql += " AND categoria=?"
+        params.append(categoria)
+    if unmatched_only:
+        sql += " AND matched_order_id IS NULL"
+    sql += " ORDER BY fecha DESC, id DESC"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return rows_to_list(rows)
+
+
+def update_bank_entry(entry_id: int, data: dict):
+    conn = get_db()
+    sets = ", ".join([f"{k}=?" for k in data])
+    conn.execute(f"UPDATE bank_entries SET {sets} WHERE id=?", list(data.values()) + [entry_id])
+    conn.commit()
+    conn.close()
+
+
+# ── Cash sales CRUD ──
+def insert_cash_sale(data: dict) -> int:
+    conn = get_db()
+    cols = ", ".join(data.keys())
+    placeholders = ", ".join(["?"] * len(data))
+    cur = conn.execute(f"INSERT INTO cash_sales ({cols}) VALUES ({placeholders})", list(data.values()))
+    conn.commit()
+    sale_id = cur.lastrowid
+    conn.close()
+    return sale_id
+
+
+def get_cash_sales(month=None):
+    conn = get_db()
+    sql = "SELECT * FROM cash_sales WHERE 1=1"
+    params = []
+    if month:
+        sql += " AND fecha LIKE ?"
+        params.append(f"{month}%")
+    sql += " ORDER BY fecha DESC, id DESC"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return rows_to_list(rows)
+
+
+def delete_cash_sale(sale_id: int):
+    conn = get_db()
+    conn.execute("DELETE FROM cash_sales WHERE id=?", (sale_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── Accounting stats ──
+def get_accounting_stats(month=None):
+    import datetime as _dt
+    if not month:
+        month = _dt.date.today().strftime("%Y-%m")
+
+    conn = get_db()
+
+    def _sum_bank(where_clause, params=None):
+        sql = f"SELECT COALESCE(SUM(importe), 0) as s FROM bank_entries WHERE fecha LIKE ? AND ({where_clause})"
+        all_params = [f"{month}%"] + (params or [])
+        return conn.execute(sql, all_params).fetchone()["s"]
+
+    def _sum_bank_abs(where_clause, params=None):
+        sql = f"SELECT COALESCE(SUM(ABS(importe)), 0) as s FROM bank_entries WHERE fecha LIKE ? AND ({where_clause})"
+        all_params = [f"{month}%"] + (params or [])
+        return conn.execute(sql, all_params).fetchone()["s"]
+
+    ingresos_shopify = _sum_bank("categoria='shopify_payout' AND importe > 0")
+    ingresos_transferencia = _sum_bank("categoria='transferencia_cliente' AND importe > 0")
+    ingresos_paypal = _sum_bank("categoria='paypal' AND importe > 0")
+
+    cash_row = conn.execute(
+        "SELECT COALESCE(SUM(importe), 0) as s FROM cash_sales WHERE fecha LIKE ?",
+        (f"{month}%",)
+    ).fetchone()
+    ingresos_efectivo = cash_row["s"]
+
+    total_ingresos = ingresos_shopify + ingresos_transferencia + ingresos_paypal + ingresos_efectivo
+
+    gastos_taller = _sum_bank_abs("categoria IN ('gasto_taller', 'gasto_piedras') AND importe < 0")
+    gastos_fijos = _sum_bank_abs("categoria IN ('alquiler', 'saas', 'packaging', 'otro_gasto') AND importe < 0")
+    gastos_nominas = _sum_bank_abs("categoria='nomina' AND importe < 0")
+    gastos_publicidad = _sum_bank_abs("categoria='publicidad' AND importe < 0")
+    gastos_impuestos = _sum_bank_abs("categoria='impuestos' AND importe < 0")
+
+    total_gastos = gastos_taller + gastos_fijos + gastos_nominas + gastos_publicidad + gastos_impuestos
+    resultado = total_ingresos - total_gastos
+
+    conn.close()
+    return {
+        "month": month,
+        "ingresos_shopify": ingresos_shopify,
+        "ingresos_transferencia": ingresos_transferencia,
+        "ingresos_paypal": ingresos_paypal,
+        "ingresos_efectivo": ingresos_efectivo,
+        "total_ingresos": total_ingresos,
+        "gastos_taller": gastos_taller,
+        "gastos_fijos": gastos_fijos,
+        "gastos_nominas": gastos_nominas,
+        "gastos_publicidad": gastos_publicidad,
+        "gastos_impuestos": gastos_impuestos,
+        "total_gastos": total_gastos,
+        "resultado": resultado,
+    }
 
 
 if __name__ == "__main__":
