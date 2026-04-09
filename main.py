@@ -384,8 +384,8 @@ def sync_orders():
 
         count = sync_from_api(full=True)
 
-        # Auto-notify suppliers for new orders
-        _auto_notify_new_orders(existing_ids)
+        # Auto-notify disabled: María notifica manualmente desde cada pedido
+        # _auto_notify_new_orders(existing_ids)
 
         return JSONResponse({"ok": True, "count": count, "source": "shopify_api"})
     except Exception as api_err:
@@ -1109,21 +1109,8 @@ async def shopify_order_webhook(request: Request):
                 update_order(oid, {"lead_id": lead_id})
                 log_activity(oid, "Lead convertido automáticamente", f"Lead #{lead_id}")
 
-            # Auto-notify suppliers (if joya and not already notified)
-            if order.get("product_type", "joya") == "joya" and order.get("auto_notified") != "1":
-                try:
-                    result = notify_supplier("barto", order)
-                    log_activity(oid, "Auto-notificación a Barto", result.get("email_subject", ""))
-                    if float(order.get("lola_estimado", 0) or 0) > 0:
-                        result = notify_supplier("lola", order)
-                        log_activity(oid, "Auto-notificación a Lola", result.get("email_subject", ""))
-                    update_order(oid, {
-                        "auto_notified": "1",
-                        "status": "notificado",
-                        "barto_notified_at": datetime.now().isoformat(),
-                    })
-                except Exception as notify_err:
-                    log_activity(oid, "Error en auto-notificación", str(notify_err))
+            # Auto-notify disabled: María notifica manualmente desde cada pedido
+            # Cuando quieran activarlo, descomentar este bloque
 
         return JSONResponse({"ok": True, "processed": len(order_ids)})
     except Exception as e:
