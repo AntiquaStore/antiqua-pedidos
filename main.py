@@ -468,7 +468,7 @@ async def create_manual_order(request: Request):
             "variant": "",
             "fecha_pedido": d.today().isoformat(),
             "pvp": pvp,
-            "payment_gateway": body.get("via", "whatsapp"),
+            "payment_gateway": body.get("metodo_pago", "transferencia"),
             "estado_pago": body.get("estado_pago", "pendiente"),
             "notes": body.get("notes", "").strip(),
             "status": "nuevo",

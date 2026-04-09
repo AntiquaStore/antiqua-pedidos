@@ -80,15 +80,11 @@
         </div>
     </div>
 
-    <!-- Row 2: Efectivo, Total ingresos, Total gastos -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <div class="bg-white border-2 border-dashed border-taupe/40 p-5">
-            <p class="text-2xl font-bold text-dark tabular-nums" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.2f}".format(stats.ingresos_efectivo or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</p>
-            <p class="text-sm text-secondary mt-1 tracking-wide">Ingresos efectivo (B)</p>
-        </div>
+    <!-- Row 2: Total ingresos, Total gastos -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div class="bg-white border border-line p-5">
             <p class="text-2xl font-bold text-[#4a7c59] tabular-nums" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.2f}".format(stats.total_ingresos or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</p>
-            <p class="text-sm text-secondary mt-1 tracking-wide">Total ingresos (neto banco + efectivo)</p>
+            <p class="text-sm text-secondary mt-1 tracking-wide">Total ingresos (neto banco)</p>
         </div>
         <div class="bg-white border border-line p-5">
             <p class="text-2xl font-bold text-red-600 tabular-nums" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.2f}".format(stats.total_gastos or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</p>
@@ -339,8 +335,24 @@
     <!-- Section: Ventas en efectivo (B) -->
     <h2 class="text-lg text-dark mb-4" style="font-family: 'Libre Baskerville', serif;">Ventas en efectivo (B)</h2>
 
+    <!-- KPIs de efectivo -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div class="border-2 border-dashed border-taupe/40 p-4">
+            <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.efectivo_count or 0 }}</p>
+            <p class="text-[11px] text-secondary">Ventas en B (periodo)</p>
+        </div>
+        <div class="border-2 border-dashed border-taupe/40 p-4">
+            <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.ingresos_efectivo or 0)|replace(",", ".") }} &euro;</p>
+            <p class="text-[11px] text-secondary">Total facturado en B (periodo)</p>
+        </div>
+        <div class="border-2 border-dashed border-taupe/40 p-4">
+            <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{% if (stats.efectivo_count or 0) > 0 %}{{ "{:,.0f}".format((stats.ingresos_efectivo or 0) / stats.efectivo_count)|replace(",", ".") }} &euro;{% else %}0 &euro;{% endif %}</p>
+            <p class="text-[11px] text-secondary">Ticket medio B</p>
+        </div>
+    </div>
+
     <div class="border-2 border-dashed border-taupe/40 p-5 mb-6">
-        <p class="text-xs text-secondary mb-4">Estas ventas son de control interno y no aparecen en informes fiscales.</p>
+        <p class="text-xs text-secondary mb-4">Control interno. No aparece en informes fiscales ni en los totales de arriba.</p>
 
         <!-- Add cash sale form -->
         <form method="POST" action="/api/cash-sales" class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end mb-6">

@@ -820,8 +820,13 @@ def get_accounting_stats(month=None, from_month=None, to_month=None):
         (date_start, date_end)
     ).fetchone()
     ingresos_efectivo = cash_row["s"]
+    efectivo_count = conn.execute(
+        "SELECT COUNT(*) as c FROM cash_sales WHERE fecha >= ? AND fecha < ?",
+        (date_start, date_end)
+    ).fetchone()["c"]
 
-    total_ingresos = ingresos_shopify + ingresos_transferencia + ingresos_paypal + ingresos_efectivo
+    # Efectivo (B) NO se suma a total_ingresos — es solo control interno
+    total_ingresos = ingresos_shopify + ingresos_transferencia + ingresos_paypal
 
     gastos_taller = _sum_bank_abs("categoria IN ('gasto_taller', 'gasto_piedras') AND importe < 0")
     gastos_fijos = _sum_bank_abs("categoria IN ('alquiler', 'saas', 'packaging', 'otro_gasto', 'telefonia', 'envios', 'asesoria', 'formacion', 'fotografia', 'comision_transferencia') AND importe < 0")
@@ -864,6 +869,7 @@ def get_accounting_stats(month=None, from_month=None, to_month=None):
         "ingresos_transferencia": ingresos_transferencia,
         "ingresos_paypal": ingresos_paypal,
         "ingresos_efectivo": ingresos_efectivo,
+        "efectivo_count": efectivo_count,
         "total_ingresos": total_ingresos,
         "gastos_taller": gastos_taller,
         "gastos_fijos": gastos_fijos,

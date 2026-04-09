@@ -371,7 +371,7 @@
                         <input x-model="form.phone" type="tel" class="w-full px-4 py-2 border border-line text-sm" placeholder="+34 600 000 000">
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">V&iacute;a de contacto</label>
                         <select x-model="form.via" class="w-full px-4 py-2 border border-line text-sm bg-white">
@@ -379,6 +379,17 @@
                             <option value="instagram">Instagram</option>
                             <option value="email">Email</option>
                             <option value="presencial">Presencial</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">M&eacute;todo de pago</label>
+                        <select x-model="form.metodo_pago" class="w-full px-4 py-2 border border-line text-sm bg-white">
+                            <option value="transferencia">Transferencia</option>
+                            <option value="bizum">Bizum</option>
+                            <option value="efectivo">Efectivo</option>
+                            <option value="shopify_link">Link Shopify</option>
+                            <option value="paypal">PayPal</option>
                             <option value="otro">Otro</option>
                         </select>
                     </div>
@@ -514,7 +525,7 @@
             submitting: false,
             form: {
                 product_name: '', ring_size: '', customer_name: '', pvp: '',
-                email: '', phone: '', via: 'whatsapp', estado_pago: 'pendiente', notes: ''
+                email: '', phone: '', via: 'whatsapp', metodo_pago: 'transferencia', estado_pago: 'pendiente', notes: ''
             },
             async submit() {
                 this.submitting = true;
