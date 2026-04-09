@@ -194,6 +194,40 @@ def whatsapp_template_barto(order: dict) -> str:
     return "\n".join(lines)
 
 
+def whatsapp_cambio_talla(order: dict, talla_original: str, talla_nueva: str) -> str:
+    order_num = order.get("shopify_order_number", "")
+    piece = order.get("product_name", "")
+    customer = order.get("customer_name", "")
+    deadline = add_business_days(date.today(), 7)
+    fecha_limite = f"{deadline.day} de {MESES[deadline.month - 1]}"
+    lines = [
+        "Hola Barto, cambio de talla:",
+        "",
+        f"Pedido {order_num} - {piece} ({customer})",
+        f"- Talla original: {talla_original}",
+        f"- Nueva talla: {talla_nueva}",
+        f"- Plazo: {fecha_limite} (7 dias habiles)",
+        "",
+        "Mima - Asistente de Antiqua",
+    ]
+    return "\n".join(lines)
+
+
+def whatsapp_arreglo(order: dict, descripcion: str) -> str:
+    order_num = order.get("shopify_order_number", "")
+    piece = order.get("product_name", "")
+    customer = order.get("customer_name", "")
+    lines = [
+        "Hola Barto, arreglo necesario:",
+        "",
+        f"Pedido {order_num} - {piece} ({customer})",
+        f"- Descripcion: {descripcion}",
+        "",
+        "Mima - Asistente de Antiqua",
+    ]
+    return "\n".join(lines)
+
+
 def generate_whatsapp_link(supplier: str, order: dict) -> str:
     """Generate wa.me link with pre-filled message."""
     info = SUPPLIERS.get(supplier, {})

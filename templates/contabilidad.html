@@ -107,6 +107,29 @@
         </div>
     </div>
 
+    <!-- SEMÁFORO DE PENDIENTES -->
+    {% if unmatched is defined and unmatched %}
+    {% set total_pending = (unmatched.unmatched_ingresos or 0) + (unmatched.uncategorized or 0) %}
+    {% if total_pending > 0 %}
+    <div class="mb-6 border {{ 'border-amber-300 bg-amber-50' if total_pending < 10 else 'border-red-300 bg-red-50' }} p-4 flex flex-wrap items-center gap-4">
+        <span class="text-lg">{{ '&#9888;' if total_pending >= 10 else '&#9432;' }}</span>
+        <div class="flex flex-wrap gap-6 text-sm">
+            {% if unmatched.unmatched_ingresos %}
+            <span class="font-medium {{ 'text-red-700' if unmatched.unmatched_ingresos >= 5 else 'text-amber-700' }}">
+                {{ unmatched.unmatched_ingresos }} ingreso{{ 's' if unmatched.unmatched_ingresos != 1 }} sin vincular a pedido
+                ({{ "{:,.2f}".format(unmatched.total_unmatched_amount or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;)
+            </span>
+            {% endif %}
+            {% if unmatched.uncategorized %}
+            <span class="font-medium text-amber-700">
+                {{ unmatched.uncategorized }} movimiento{{ 's' if unmatched.uncategorized != 1 }} sin categorizar
+            </span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
     <!-- CONCILIACION SHOPIFY vs BANCO -->
     <h2 class="text-lg text-dark mb-3" style="font-family: 'Libre Baskerville', serif;">Conciliaci&oacute;n Shopify vs Banco</h2>
     <div class="bg-white border border-line mb-8 overflow-hidden">

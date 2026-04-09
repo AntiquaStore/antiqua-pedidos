@@ -543,6 +543,146 @@
 {% endif %}
 
 {# ══════════════════════════════════════════════════════════════
+   6c. POST-VENTA: CAMBIO DE TALLA + ARREGLO
+   ══════════════════════════════════════════════════════════════ #}
+<div class="bg-white border border-line p-6 mb-6" x-data="{
+    /* Cambio talla */
+    talla_orig: '{{ order.cambio_talla_original or order.ring_size or '' }}',
+    talla_nueva: '{{ order.cambio_talla_nueva or '' }}',
+    cambio_pending: {{ 'true' if order.cambio_talla_solicitado == '1' and order.cambio_talla_completado != '1' else 'false' }},
+    cambio_done: {{ 'true' if order.cambio_talla_completado == '1' else 'false' }},
+    /* Arreglo */
+    arreglo_desc: '{{ (order.arreglo_descripcion or '')|replace(chr(39), chr(92)+chr(39))|replace(chr(10), ' ') }}',
+    arreglo_pending: {{ 'true' if order.arreglo_solicitado == '1' and order.arreglo_completado != '1' else 'false' }},
+    arreglo_done: {{ 'true' if order.arreglo_completado == '1' else 'false' }},
+    saving: false,
+
+    async solicitarCambio() {
+        if (!this.talla_nueva) { alert('Introduce la nueva talla'); return; }
+        if (!confirm('Solicitar cambio de talla ' + this.talla_orig + ' a ' + this.talla_nueva + '?')) return;
+        this.saving = true;
+        const res = await fetch('/api/orders/{{ order.id }}/cambio-talla', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ talla_original: this.talla_orig, talla_nueva: this.talla_nueva })
+        });
+        const data = await res.json();
+        if (data.ok && data.whatsapp_link) window.open(data.whatsapp_link, '_blank');
+        this.saving = false;
+        window.location.reload();
+    },
+
+    async solicitarArreglo() {
+        if (!this.arreglo_desc) { alert('Describe el arreglo'); return; }
+        if (!confirm('Solicitar arreglo?')) return;
+        this.saving = true;
+        const res = await fetch('/api/orders/{{ order.id }}/arreglo', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ descripcion: this.arreglo_desc })
+        });
+        const data = await res.json();
+        if (data.ok && data.whatsapp_link) window.open(data.whatsapp_link, '_blank');
+        this.saving = false;
+        window.location.reload();
+    }
+}">
+    <h2 class="text-lg mb-4 text-dark" style="font-family: 'Libre Baskerville', serif;">Post-venta</h2>
+
+    <!-- Cambio de talla -->
+    <div class="mb-6">
+        <h3 class="text-sm font-semibold text-dark uppercase tracking-wide mb-3">Cambio de talla</h3>
+        {% if order.cambio_talla_completado == '1' %}
+        <p class="text-sm text-green-700">Completado: de {{ order.cambio_talla_original }} a {{ order.cambio_talla_nueva }}</p>
+        {% elif order.cambio_talla_solicitado == '1' %}
+        <p class="text-sm text-amber-600 font-semibold mb-2">Pendiente: de {{ order.cambio_talla_original }} a {{ order.cambio_talla_nueva }}</p>
+        {% else %}
+        <div class="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+            <div>
+                <label class="block text-xs text-secondary mb-1">Talla original</label>
+                <input type="text" x-model="talla_orig" class="border border-line px-3 py-2 text-sm w-20 focus:outline-none focus:border-taupe" style="border-radius:0;">
+            </div>
+            <div>
+                <label class="block text-xs text-secondary mb-1">Nueva talla</label>
+                <input type="text" x-model="talla_nueva" class="border border-line px-3 py-2 text-sm w-20 focus:outline-none focus:border-taupe" style="border-radius:0;">
+            </div>
+            <button @click="solicitarCambio()" :disabled="saving"
+                    class="px-4 py-2 bg-dark text-white text-xs uppercase tracking-widest font-semibold hover:bg-secondary transition-colors disabled:opacity-50" style="border-radius:0;">
+                Solicitar cambio
+            </button>
+        </div>
+        <p class="text-xs text-secondary mt-2">Se notifica a Barto por WhatsApp con plazo de 7 d&iacute;as</p>
+        {% endif %}
+    </div>
+
+    <!-- Arreglo -->
+    <div>
+        <h3 class="text-sm font-semibold text-dark uppercase tracking-wide mb-3">Arreglo</h3>
+        {% if order.arreglo_completado == '1' %}
+        <p class="text-sm text-green-700">Completado: {{ order.arreglo_descripcion }}</p>
+        {% elif order.arreglo_solicitado == '1' %}
+        <p class="text-sm text-amber-600 font-semibold mb-2">Pendiente: {{ order.arreglo_descripcion }}</p>
+        {% else %}
+        <div class="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+            <div class="flex-1 w-full">
+                <label class="block text-xs text-secondary mb-1">Descripci&oacute;n del arreglo</label>
+                <input type="text" x-model="arreglo_desc" placeholder="Ej: pulir, soldar cierre, ajustar engaste..."
+                       class="w-full border border-line px-3 py-2 text-sm focus:outline-none focus:border-taupe" style="border-radius:0;">
+            </div>
+            <button @click="solicitarArreglo()" :disabled="saving"
+                    class="px-4 py-2 bg-dark text-white text-xs uppercase tracking-widest font-semibold hover:bg-secondary transition-colors disabled:opacity-50" style="border-radius:0;">
+                Solicitar arreglo
+            </button>
+        </div>
+        <p class="text-xs text-secondary mt-2">Se notifica a Barto por WhatsApp</p>
+        {% endif %}
+    </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════
+   6b. CUSTOMER COMMUNICATION
+   ══════════════════════════════════════════════════════════════ #}
+{% if order.customer_email %}
+<div class="bg-white border border-line p-6 mb-6" x-data="customerNotify()">
+    <h2 class="text-lg mb-4 text-dark">Comunicar al cliente</h2>
+    <p class="text-sm text-secondary mb-4">Enviar email a <span class="font-medium text-dark">{{ order.customer_email }}</span></p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <button @click="send('confirmacion_pedido')" :disabled="sending"
+                class="text-left px-4 py-3 border border-line hover:border-bronze transition-colors">
+            <p class="text-sm font-semibold text-dark">Confirmaci&oacute;n de pedido</p>
+            <p class="text-xs text-secondary mt-1">&ldquo;Tu joya est&aacute; en camino de ser creada&rdquo;</p>
+        </button>
+        <button @click="send('inicio_produccion')" :disabled="sending"
+                class="text-left px-4 py-3 border border-line hover:border-bronze transition-colors">
+            <p class="text-sm font-semibold text-dark">Inicio de producci&oacute;n</p>
+            <p class="text-xs text-secondary mt-1">&ldquo;Tu joya ha entrado en taller&rdquo;</p>
+        </button>
+        <button @click="send('actualizacion_fase')" :disabled="sending"
+                class="text-left px-4 py-3 border border-line hover:border-bronze transition-colors">
+            <p class="text-sm font-semibold text-dark">Actualizaci&oacute;n de fase</p>
+            <p class="text-xs text-secondary mt-1">&ldquo;Tu joya est&aacute; en fase de&hellip;&rdquo;</p>
+        </button>
+        <button @click="send('joya_terminada')" :disabled="sending"
+                class="text-left px-4 py-3 border border-line hover:border-bronze transition-colors">
+            <p class="text-sm font-semibold text-dark">Joya terminada</p>
+            <p class="text-xs text-secondary mt-1">&ldquo;&iexcl;Tu joya est&aacute; lista!&rdquo;</p>
+        </button>
+        <button @click="send('envio_realizado')" :disabled="sending"
+                class="text-left px-4 py-3 border border-line hover:border-bronze transition-colors">
+            <p class="text-sm font-semibold text-dark">Env&iacute;o realizado</p>
+            <p class="text-xs text-secondary mt-1">&ldquo;Tu joya est&aacute; en camino&rdquo;</p>
+        </button>
+    </div>
+
+    <!-- Result toast -->
+    <div x-show="result" x-cloak class="mt-4 px-4 py-3 text-sm"
+         :class="resultOk ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'"
+         x-text="result"></div>
+</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════
    7. ACTIVITY TIMELINE
    ══════════════════════════════════════════════════════════════ #}
 <div class="bg-white border border-line p-6">
@@ -572,4 +712,44 @@
     {% endif %}
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+function customerNotify() {
+    return {
+        sending: false,
+        result: null,
+        resultOk: false,
+        async send(template) {
+            if (!confirm('¿Enviar este email al cliente?')) return;
+            this.sending = true;
+            this.result = null;
+            try {
+                const res = await fetch('/api/orders/{{ order.id }}/notify-customer', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        template: template,
+                        fase: '{{ order.fase_produccion or "" }}'
+                    })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    this.result = 'Email enviado a {{ order.customer_email }}';
+                    this.resultOk = true;
+                } else {
+                    this.result = 'Error: ' + (data.error || 'No se pudo enviar');
+                    this.resultOk = false;
+                }
+            } catch (e) {
+                this.result = 'Error de conexión';
+                this.resultOk = false;
+            }
+            this.sending = false;
+            setTimeout(() => { this.result = null; }, 5000);
+        }
+    }
+}
+</script>
 {% endblock %}

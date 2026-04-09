@@ -169,15 +169,27 @@ def categorize_entry(concepto, importe):
 
 
 def match_with_orders(bank_entries, orders):
-    """Try to match bank ingresos with Shopify orders by amount (tolerance < 1 EUR).
+    """Try to match bank ingresos with Shopify orders by multiple criteria:
+    1. Exact amount match (PVP, tolerance < 1 EUR)
+    2. Base imponible match (PVP/1.21, tolerance < 1 EUR)
+    3. Customer name in concepto
     Returns bank_entries with matched_order_id set where possible.
     """
-    # Build list of unmatched orders with their PVP
     available_orders = []
     for o in orders:
         pvp = float(o.get("pvp", 0) or 0)
+        base = pvp / 1.21 if pvp > 0 else 0
+        name = (o.get("customer_name", "") or "").upper().strip()
+        name_parts = name.split() if name else []
         if pvp > 0:
-            available_orders.append({"id": o["id"], "pvp": pvp, "matched": False})
+            available_orders.append({
+                "id": o["id"],
+                "pvp": pvp,
+                "base": round(base, 2),
+                "name": name,
+                "name_parts": name_parts,
+                "matched": False,
+            })
 
     for entry in bank_entries:
         if entry.get("tipo") != "ingreso":
@@ -186,7 +198,9 @@ def match_with_orders(bank_entries, orders):
         if importe <= 0:
             continue
 
-        # Try to find a matching order
+        concepto_upper = (entry.get("concepto", "") or "").upper()
+
+        # Strategy 1: Exact PVP match (< 1 EUR tolerance)
         best_match = None
         best_diff = 999999
         for order in available_orders:
@@ -197,8 +211,43 @@ def match_with_orders(bank_entries, orders):
                 best_match = order
                 best_diff = diff
 
+        # Strategy 2: Base imponible match (transferencias = sin IVA)
+        if not best_match:
+            for order in available_orders:
+                if order["matched"]:
+                    continue
+                diff = abs(importe - order["base"])
+                if diff < 1.0 and diff < best_diff:
+                    best_match = order
+                    best_diff = diff
+
+        # Strategy 3: Customer name appears in concepto
+        if not best_match and concepto_upper:
+            for order in available_orders:
+                if order["matched"]:
+                    continue
+                # Match if at least 2 name parts appear in the concepto
+                if len(order["name_parts"]) >= 2:
+                    matches = sum(1 for p in order["name_parts"] if p in concepto_upper)
+                    if matches >= 2:
+                        best_match = order
+                        break
+
         if best_match:
             entry["matched_order_id"] = best_match["id"]
             best_match["matched"] = True
+            if not entry.get("notas"):
+                entry["notas"] = f"Auto-match: pedido #{best_match['id']}"
 
     return bank_entries
+
+
+def get_unmatched_summary(bank_entries):
+    """Return summary of unmatched entries for the dashboard semaphore."""
+    unmatched_ingresos = [e for e in bank_entries if e.get("tipo") == "ingreso" and not e.get("matched_order_id")]
+    uncategorized = [e for e in bank_entries if not e.get("categoria") or e.get("categoria") in ("otro_ingreso", "otro_gasto")]
+    return {
+        "unmatched_ingresos": len(unmatched_ingresos),
+        "uncategorized": len(uncategorized),
+        "total_unmatched_amount": sum(abs(e.get("importe", 0)) for e in unmatched_ingresos),
+    }

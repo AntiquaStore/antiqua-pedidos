@@ -25,7 +25,7 @@ from models import (
     match_lead_to_order, convert_lead, advance_production_phase,
     PRODUCTION_PHASES,
 )
-from bank_reconciliation import parse_bank_csv, categorize_entry, match_with_orders
+from bank_reconciliation import parse_bank_csv, categorize_entry, match_with_orders, get_unmatched_summary
 from catalog import load_catalog, estimate_costs
 from shopify_client import sync_from_api, sync_from_csv
 from excel_sync import export_order_to_excel, import_excel_to_db, export_all_to_excel
@@ -503,6 +503,33 @@ def cleanup_test_orders():
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
+@app.post("/api/orders/{order_id}/notify-customer")
+async def notify_customer_endpoint(order_id: str, request: Request):
+    """Send a customer notification email using a template."""
+    try:
+        data = await request.json()
+        template_key = data.get("template", "")
+        fase = data.get("fase", "")
+
+        order = get_order(order_id)
+        if not order:
+            return JSONResponse({"ok": False, "error": "Pedido no encontrado"}, status_code=404)
+
+        result = notify_customer(order, template_key, fase)
+        if result.get("ok"):
+            log_activity(order_id, f"Email cliente: {template_key}", result.get("email_subject", ""))
+
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/customer-templates")
+def list_customer_templates():
+    """List available customer email templates."""
+    return JSONResponse({k: {"subject": v["subject"]} for k, v in CUSTOMER_TEMPLATES.items()})
+
+
 @app.put("/api/orders/{order_id}")
 async def update_order_endpoint(order_id: str, request: Request):
     try:
@@ -640,6 +667,58 @@ async def update_real_costs(order_id: str, request: Request):
         return JSONResponse({"ok": True, "order": updated_order})
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+@app.post("/api/orders/{order_id}/cambio-talla")
+async def request_size_change(order_id: int, request: Request):
+    import urllib.parse as _up
+    data = await request.json()
+    talla_original = data.get("talla_original", "")
+    talla_nueva = data.get("talla_nueva", "")
+    update_order(order_id, {
+        "cambio_talla_original": talla_original,
+        "cambio_talla_nueva": talla_nueva,
+        "cambio_talla_solicitado": "1",
+        "cambio_talla_solicitado_at": datetime.now().isoformat(),
+    })
+    log_activity(order_id, "Cambio de talla solicitado", f"De {talla_original} a {talla_nueva}")
+    order = get_order(order_id)
+    from notifications import whatsapp_cambio_talla
+    msg = whatsapp_cambio_talla(order, talla_original, talla_nueva)
+    wa_link = f"https://wa.me/34659319904?text={_up.quote(msg)}"
+    return JSONResponse({"ok": True, "whatsapp_link": wa_link})
+
+
+@app.post("/api/orders/{order_id}/arreglo")
+async def request_repair(order_id: int, request: Request):
+    import urllib.parse as _up
+    data = await request.json()
+    descripcion = data.get("descripcion", "")
+    update_order(order_id, {
+        "arreglo_descripcion": descripcion,
+        "arreglo_solicitado": "1",
+        "arreglo_solicitado_at": datetime.now().isoformat(),
+    })
+    log_activity(order_id, "Arreglo solicitado", descripcion)
+    order = get_order(order_id)
+    from notifications import whatsapp_arreglo
+    msg = whatsapp_arreglo(order, descripcion)
+    wa_link = f"https://wa.me/34659319904?text={_up.quote(msg)}"
+    return JSONResponse({"ok": True, "whatsapp_link": wa_link})
+
+
+@app.post("/proveedor/barto/cambio-completado/{order_id}")
+def barto_cambio_done(request: Request, order_id: int):
+    update_order(order_id, {"cambio_talla_completado": "1"})
+    log_activity(order_id, "Cambio de talla completado")
+    return RedirectResponse(url="/proveedor/barto", status_code=302)
+
+
+@app.post("/proveedor/barto/arreglo-completado/{order_id}")
+def barto_arreglo_done(request: Request, order_id: int):
+    update_order(order_id, {"arreglo_completado": "1"})
+    log_activity(order_id, "Arreglo completado")
+    return RedirectResponse(url="/proveedor/barto", status_code=302)
+
 
 @app.post("/api/fix-all-status")
 def fix_all_status():
@@ -932,6 +1011,7 @@ def contabilidad_page(request: Request, from_month: str = None, to_month: str = 
         entries = get_bank_entries(from_month=from_month, to_month=to_month)
         cash = get_cash_sales(from_month=from_month, to_month=to_month)
         gold_price_info = get_gold_info()
+        unmatched = get_unmatched_summary(entries)
         return templates.TemplateResponse(name="contabilidad.html", request=request, context={
             "stats": acc_stats,
             "entries": entries,
@@ -939,6 +1019,7 @@ def contabilidad_page(request: Request, from_month: str = None, to_month: str = 
             "gold_price": gold_price_info,
             "from_month": from_month,
             "to_month": to_month,
+            "unmatched": unmatched,
         })
     except Exception as e:
         now = datetime.now().strftime("%Y-%m")

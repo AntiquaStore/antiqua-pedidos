@@ -117,6 +117,15 @@ def init_db():
         ("fase_updated_at", "TEXT"),
         ("auto_notified", "TEXT DEFAULT '0'"),
         ("lead_id", "INTEGER"),
+        ("cambio_talla_original", "TEXT"),
+        ("cambio_talla_nueva", "TEXT"),
+        ("cambio_talla_solicitado", "TEXT DEFAULT '0'"),
+        ("cambio_talla_solicitado_at", "TEXT"),
+        ("cambio_talla_completado", "TEXT DEFAULT '0'"),
+        ("arreglo_descripcion", "TEXT"),
+        ("arreglo_solicitado", "TEXT DEFAULT '0'"),
+        ("arreglo_solicitado_at", "TEXT"),
+        ("arreglo_completado", "TEXT DEFAULT '0'"),
     ]:
         try:
             conn.execute(f"ALTER TABLE orders ADD COLUMN {col} {coltype}")
@@ -433,20 +442,24 @@ def get_dashboard_stats():
     now = _dt.date.today()
     current_month = now.strftime("%Y-%m")
     current_year = now.strftime("%Y")
+    # Excluir joyeros regalo (los que vienen con otros items en el mismo pedido)
+    excluir_regalo = """AND NOT (product_type = 'joyero' AND EXISTS (
+        SELECT 1 FROM orders o2 WHERE o2.shopify_order_id = orders.shopify_order_id AND o2.product_type != 'joyero'
+    ))"""
     ventas_mes = conn.execute(
-        "SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND COALESCE(product_type,'joya') != 'joyero'",
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? {excluir_regalo}",
         (f"{current_month}%",)
     ).fetchone()["c"]
     facturacion_mes = conn.execute(
-        "SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? AND COALESCE(product_type,'joya') != 'joyero'",
+        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {excluir_regalo}",
         (f"{current_month}%",)
     ).fetchone()["s"]
     ventas_ano = conn.execute(
-        "SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND COALESCE(product_type,'joya') != 'joyero'",
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? {excluir_regalo}",
         (f"{current_year}%",)
     ).fetchone()["c"]
     facturacion_ano = conn.execute(
-        "SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? AND COALESCE(product_type,'joya') != 'joyero'",
+        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {excluir_regalo}",
         (f"{current_year}%",)
     ).fetchone()["s"]
     mes_nombre = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"][now.month - 1]
@@ -507,12 +520,32 @@ def get_supplier_orders(supplier: str):
     """
     conn = get_db()
     if supplier == "barto":
+        # Production orders + pending size changes + pending repairs
         pending = conn.execute(
-            "SELECT * FROM orders WHERE status != 'entregado' AND COALESCE(product_type,'joya') != 'joyero' ORDER BY fecha_pedido DESC"
+            """SELECT *, 'produccion' as tipo_tarea FROM orders
+               WHERE status != 'entregado' AND COALESCE(product_type,'joya') != 'joyero'
+            UNION
+            SELECT *, 'cambio_talla' as tipo_tarea FROM orders
+               WHERE cambio_talla_solicitado='1' AND cambio_talla_completado!='1'
+            UNION
+            SELECT *, 'arreglo' as tipo_tarea FROM orders
+               WHERE arreglo_solicitado='1' AND arreglo_completado!='1'
+            ORDER BY fecha_pedido DESC"""
         ).fetchall()
+        # Deduplicate by id (keep first occurrence)
+        seen_ids = set()
+        deduped = []
+        for row in pending:
+            d = dict(row)
+            if d["id"] not in seen_ids:
+                seen_ids.add(d["id"])
+                deduped.append(d)
+        pending_list = deduped
         completed = conn.execute(
             "SELECT * FROM orders WHERE joya_terminada = '1' ORDER BY joya_terminada_at DESC LIMIT 50"
         ).fetchall()
+        conn.close()
+        return {"pending": pending_list, "completed": rows_to_list(completed)}
     elif supplier == "lola":
         pending = conn.execute(
             """SELECT * FROM orders
