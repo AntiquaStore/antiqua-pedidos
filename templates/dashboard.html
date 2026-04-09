@@ -248,7 +248,7 @@
                         </td>
                         <td class="px-5 py-4 text-sm text-secondary">{{ order.ring_size or '-' }}</td>
                         <td class="px-5 py-4 text-sm text-dark">{{ order.customer_name or '-' }}</td>
-                        <td class="px-5 py-4 text-sm text-secondary">{{ order.fecha_pedido[:10] if order.fecha_pedido else '-' }}</td>
+                        <td class="px-5 py-4 text-sm text-secondary">{% if order.fecha_pedido %}{{ order.fecha_pedido[8:10] }}/{{ order.fecha_pedido[5:7] }}/{{ order.fecha_pedido[2:4] }}{% else %}-{% endif %}</td>
                         <td class="px-5 py-4 text-sm text-dark text-right tabular-nums">{{ "{:,.0f}".format(order.pvp or 0)|replace(",", ".") }} &euro;</td>
                         {# ── Pago ── #}
                         {% set gw = (order.payment_gateway or '')|lower %}
@@ -268,11 +268,11 @@
                             {% endif %}
                         </td>
                         {# ── Estado ── #}
-                        <td class="px-3 py-4 text-center" x-data="statusChanger('{{ order.id }}', '{{ order.status }}', '{{ order.ring_size or '' }}')">
+                        <td class="px-2 py-4 text-center" x-data="statusChanger('{{ order.id }}', '{{ order.status }}', '{{ order.ring_size or '' }}')">
                             <select @change="changeStatus($event.target.value)"
                                     :disabled="saving"
-                                    class="text-[11px] uppercase tracking-wide font-semibold text-white pl-2 pr-5 py-1.5 border-0 cursor-pointer {{ status_colors.get(order.status, 'bg-secondary') }}"
-                                    style="border-radius: 0;">
+                                    class="text-[10px] uppercase tracking-wide font-semibold text-white pl-1 pr-4 py-1 border-0 cursor-pointer {{ status_colors.get(order.status, 'bg-secondary') }}"
+                                    style="border-radius: 0; max-width: 120px;">
                                 {% for val, label in status_options %}
                                 <option value="{{ val }}" {{ 'selected' if order.status == val }} style="background: white; color: #212121; text-transform: none;">{{ label }}</option>
                                 {% endfor %}
