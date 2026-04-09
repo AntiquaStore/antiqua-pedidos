@@ -378,10 +378,17 @@ def get_dashboard_stats():
         "SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND (payment_group IS NULL OR payment_group = '')"
     ).fetchone()["c"]
     joyas_count = joyas_grouped + joyas_ungrouped
-    # Solo joyeros vendidos realmente (PVP > 0), no regalos con pedidos >= 2500
-    joyeros_count = conn.execute(
-        "SELECT COUNT(*) as c FROM orders WHERE product_type = 'joyero' AND pvp > 0"
-    ).fetchone()["c"]
+    # Joyeros vendidos: solo los que se compraron solos (no como regalo con joyas >= 2500)
+    # Un Relique Box es regalo si su shopify_order_id tiene otros items que no son joyero
+    joyeros_count = conn.execute("""
+        SELECT COUNT(*) as c FROM orders o1
+        WHERE o1.product_type = 'joyero'
+        AND NOT EXISTS (
+            SELECT 1 FROM orders o2
+            WHERE o2.shopify_order_id = o1.shopify_order_id
+            AND o2.product_type != 'joyero'
+        )
+    """).fetchone()["c"]
     cadenas_count = conn.execute(
         "SELECT COUNT(*) as c FROM orders WHERE product_type = 'cadena'"
     ).fetchone()["c"]

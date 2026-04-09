@@ -282,3 +282,116 @@ def get_notification_preview(order: dict) -> dict:
             "to": SUPPLIERS["barto"]["email"],
         },
     }
+
+
+# ── Customer notification templates ──
+
+FASE_LABELS_ES = {
+    'prototipado': 'prototipado',
+    'fundido': 'fundición',
+    'repaso': 'repaso',
+    'engaste': 'engaste de piedras',
+    'repaso_final': 'repaso final',
+    'terminado': 'finalización',
+}
+
+CUSTOMER_TEMPLATES = {
+    "confirmacion_pedido": {
+        "subject": "Antiqua - Tu joya está en camino de ser creada",
+        "template": (
+            "Hola {nombre},\n\n"
+            "Gracias por confiar en Antiqua. Hemos recibido tu pedido de {pieza} "
+            "y nuestro equipo ya está trabajando para hacerla realidad.\n\n"
+            "Tu joya es única y se fabrica artesanalmente en nuestro taller de Madrid. "
+            "El proceso de creación lleva aproximadamente 20 días laborables.\n\n"
+            "Te iremos informando del progreso. Si tienes cualquier duda, "
+            "no dudes en escribirnos.\n\n"
+            "Un abrazo,\n"
+            "El equipo de Antiqua"
+        ),
+    },
+    "inicio_produccion": {
+        "subject": "Antiqua - Tu {pieza} ha entrado en taller",
+        "template": (
+            "Hola {nombre},\n\n"
+            "Te escribimos para contarte que tu {pieza} ya ha entrado en nuestro taller. "
+            "Nuestro orfebre ha comenzado el proceso de creación.\n\n"
+            "Te mantendremos informada del avance.\n\n"
+            "Un abrazo,\n"
+            "El equipo de Antiqua"
+        ),
+    },
+    "actualizacion_fase": {
+        "subject": "Antiqua - Tu {pieza} avanza: fase de {fase}",
+        "template": (
+            "Hola {nombre},\n\n"
+            "Queremos que sepas que tu {pieza} está en la fase de {fase}. "
+            "El proceso avanza según lo previsto y cada paso nos acerca más "
+            "al resultado final.\n\n"
+            "Pronto tendrás noticias.\n\n"
+            "Un abrazo,\n"
+            "El equipo de Antiqua"
+        ),
+    },
+    "joya_terminada": {
+        "subject": "Antiqua - ¡Tu {pieza} está lista!",
+        "template": (
+            "Hola {nombre},\n\n"
+            "¡Tenemos una gran noticia! Tu {pieza} ya está terminada "
+            "y lista para ti.\n\n"
+            "En breve te contactaremos para coordinar la entrega "
+            "o el envío.\n\n"
+            "Estamos deseando que la veas.\n\n"
+            "Un abrazo,\n"
+            "El equipo de Antiqua"
+        ),
+    },
+    "envio_realizado": {
+        "subject": "Antiqua - Tu {pieza} está en camino",
+        "template": (
+            "Hola {nombre},\n\n"
+            "Tu {pieza} ya está en camino. Hemos realizado el envío "
+            "y deberías recibirla en las próximas 24-48 horas.\n\n"
+            "Si tienes cualquier duda sobre la entrega, escríbenos.\n\n"
+            "¡Esperamos que la disfrutes!\n\n"
+            "Un abrazo,\n"
+            "El equipo de Antiqua"
+        ),
+    },
+}
+
+
+def customer_email(order: dict, template_key: str, fase: str = "") -> tuple:
+    """Generate (subject, body) for a customer email.
+    Returns (subject, body) or (None, None) if template not found.
+    """
+    tpl = CUSTOMER_TEMPLATES.get(template_key)
+    if not tpl:
+        return None, None
+
+    nombre = (order.get("customer_name") or "").split()[0] if order.get("customer_name") else "cliente"
+    pieza = order.get("product_name", "joya")
+    fase_label = FASE_LABELS_ES.get(fase, fase) if fase else ""
+
+    subject = tpl["subject"].format(nombre=nombre, pieza=pieza, fase=fase_label)
+    body = tpl["template"].format(nombre=nombre, pieza=pieza, fase=fase_label)
+    return subject, body
+
+
+def notify_customer(order: dict, template_key: str, fase: str = "") -> dict:
+    """Send a customer notification email. Returns result dict."""
+    email_addr = order.get("customer_email", "")
+    if not email_addr:
+        return {"ok": False, "error": "Cliente sin email"}
+
+    subject, body = customer_email(order, template_key, fase)
+    if not subject:
+        return {"ok": False, "error": f"Template '{template_key}' no encontrado"}
+
+    sent = send_email(email_addr, subject, body)
+    return {
+        "ok": sent,
+        "email_to": email_addr,
+        "email_subject": subject,
+        "template": template_key,
+    }

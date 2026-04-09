@@ -237,7 +237,34 @@ def sync_from_api(full=False):
             last_id = str(order["id"])
 
     models.set_setting("last_shopify_id", last_id)
+
+    # Auto-match leads for newly synced orders
+    _auto_match_leads_for_recent_orders()
+
     return count
+
+
+def _auto_match_leads_for_recent_orders():
+    """Check recent unmatched orders and try to link them to existing leads."""
+    conn = models.get_db()
+    # Get orders without a lead_id that haven't been checked
+    unmatched = conn.execute(
+        "SELECT id, customer_email, customer_phone, customer_name, shopify_order_id "
+        "FROM orders WHERE lead_id IS NULL AND status='nuevo' "
+        "ORDER BY created_at DESC LIMIT 50"
+    ).fetchall()
+    conn.close()
+
+    for order in unmatched:
+        lead_id = models.match_lead_to_order(
+            order["customer_email"] or "",
+            order["customer_phone"] or "",
+            order["customer_name"] or ""
+        )
+        if lead_id:
+            models.convert_lead(lead_id, order["shopify_order_id"] or "")
+            models.update_order(order["id"], {"lead_id": lead_id})
+            models.log_activity(order["id"], "Lead convertido automáticamente", f"Lead #{lead_id}")
 
 
 def sync_from_csv(csv_path: str = None):
@@ -305,6 +332,54 @@ def sync_from_csv(csv_path: str = None):
 
     print(f"Imported {count} orders from CSV")
     return count
+
+
+def process_webhook_order(order_data: dict) -> list[int]:
+    """Process a single order from Shopify webhook. Returns list of created order IDs."""
+    gold_price = float(models.get_setting("gold_price", os.getenv("GOLD_PRICE_PER_GRAM", "160.0")))
+    order_ids = []
+
+    for item in order_data.get("line_items", []):
+        raw_item_name = item.get("name", "")
+        product_name, ring_size, variant = parse_line_item(raw_item_name)
+        pvp = float(item.get("price", 0)) * int(item.get("quantity", 1))
+
+        estimates = catalog.estimate_costs(product_name, pvp, gold_price) or {}
+
+        billing = order_data.get("billing_address") or {}
+        shipping = order_data.get("shipping_address") or {}
+        addr = shipping or billing
+
+        product_type = classify_product_type(product_name)
+        partial = is_partial_payment(raw_item_name)
+        customer_name = billing.get("name", "")
+        payment_group = ""
+        if partial:
+            cleaned = clean_payment_name(raw_item_name)
+            payment_group = f"{cleaned}|{customer_name}".lower().strip()
+
+        data = {
+            "shopify_order_id": str(order_data["id"]),
+            "shopify_order_number": order_data.get("name", ""),
+            "customer_name": customer_name,
+            "customer_email": order_data.get("email", ""),
+            "customer_phone": billing.get("phone", ""),
+            "customer_address": f"{addr.get('address1', '')}, {addr.get('city', '')} {addr.get('zip', '')}",
+            "product_name": product_name,
+            "product_type": product_type,
+            "ring_size": ring_size,
+            "variant": variant,
+            "fecha_pedido": order_data.get("created_at", "")[:10],
+            "pvp": pvp,
+            "is_partial_payment": "1" if partial else "0",
+            "payment_group": payment_group if partial else "",
+            "status": "nuevo",
+            **estimates,
+        }
+        oid = models.upsert_order(data)
+        order_ids.append(oid)
+
+    return order_ids
 
 
 if __name__ == "__main__":

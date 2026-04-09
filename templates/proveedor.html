@@ -83,11 +83,18 @@
                                     <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Diamantes</th>
                                     <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Peso oro</th>
                                     <th class="text-center text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Piedras</th>
+                                    <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Notas</th>
+                                    <th class="text-center text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Fase</th>
                                     <th class="text-center text-xs uppercase tracking-wider text-secondary font-semibold px-4 py-3">Acci&oacute;n</th>
                                 </tr>
                             </thead>
                             <tbody>
+                                {% set fases = ['pendiente', 'prototipado', 'fundido', 'repaso', 'engaste', 'repaso_final', 'terminado'] %}
+                                {% set fase_labels = {'pendiente':'Pendiente', 'prototipado':'Prototipado', 'fundido':'Fundido', 'repaso':'Repaso', 'engaste':'Engaste', 'repaso_final':'Repaso final', 'terminado':'Terminado'} %}
                                 {% for order in pending %}
+                                {% set current_fase = order.fase_produccion or 'pendiente' %}
+                                {% set fase_index = fases.index(current_fase) if current_fase in fases else 0 %}
+                                {% set progress_pct = (fase_index / 6 * 100) | int %}
                                 <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors {{ 'bg-red-50/50' if order.urgente == '1' }}">
                                     <td class="px-4 py-3 text-sm text-secondary">
                                         {{ order.shopify_order_number or order.id }}
@@ -124,13 +131,35 @@
                                         <span class="text-xs text-secondary">&mdash;</span>
                                         {% endif %}
                                     </td>
+                                    <td class="px-4 py-3 text-xs text-secondary max-w-[200px]">
+                                        {% if order.notes %}{{ order.notes[:80] }}{% if order.notes|length > 80 %}...{% endif %}{% else %}&mdash;{% endif %}
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <!-- Progress bar -->
+                                        <div class="w-full bg-line h-1.5 mb-1.5" title="{{ fase_labels.get(current_fase, current_fase) }}">
+                                            <div class="h-1.5 transition-all duration-300
+                                                {% if progress_pct >= 100 %}bg-[#4a7c59]
+                                                {% elif progress_pct >= 50 %}bg-bronze
+                                                {% else %}bg-taupe{% endif %}"
+                                                style="width: {{ progress_pct }}%"></div>
+                                        </div>
+                                        <!-- Phase selector -->
+                                        <form method="POST" action="/proveedor/barto/fase/{{ order.id }}" class="flex items-center gap-1">
+                                            <select name="fase" class="text-[11px] border border-line bg-white text-dark py-0.5 px-1 flex-1 min-w-0"
+                                                    onchange="if(confirm('Cambiar fase a: ' + this.options[this.selectedIndex].text + '?')) this.form.submit();">
+                                                {% for fase in fases %}
+                                                <option value="{{ fase }}" {{ 'selected' if current_fase == fase }}>{{ fase_labels[fase] }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </form>
+                                    </td>
                                     <td class="px-4 py-3 text-center">
                                         {% if order.joya_terminada != '1' %}
                                         <form method="POST" action="/proveedor/barto/entregar/{{ order.id }}"
                                               onsubmit="return confirm('&iquest;Marcar esta joya como terminada?\n\nPedido: {{ order.shopify_order_number or order.id }}\nPieza: {{ order.product_name }}');">
                                             <button type="submit"
                                                     class="px-3 py-1.5 bg-dark text-white text-xs font-semibold uppercase tracking-wide hover:bg-taupe transition-colors">
-                                                Joya terminada
+                                                Terminada
                                             </button>
                                         </form>
                                         {% else %}

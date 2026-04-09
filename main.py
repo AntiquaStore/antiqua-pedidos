@@ -29,7 +29,7 @@ from bank_reconciliation import parse_bank_csv, categorize_entry, match_with_ord
 from catalog import load_catalog, estimate_costs
 from shopify_client import sync_from_api, sync_from_csv
 from excel_sync import export_order_to_excel, import_excel_to_db, export_all_to_excel
-from notifications import notify_supplier, get_notification_preview, SUPPLIERS
+from notifications import notify_supplier, get_notification_preview, SUPPLIERS, notify_customer, CUSTOMER_TEMPLATES
 from gold_price import get_gold_info, get_18k_gold_price, get_current_gold_price
 
 # ---------------------------------------------------------------------------
@@ -389,7 +389,16 @@ def lola_mark_done(request: Request, order_id: int):
 @app.post("/api/sync")
 def sync_orders():
     try:
+        # Get current order IDs before sync to detect new ones
+        conn = get_db()
+        existing_ids = set(r["shopify_order_id"] for r in conn.execute("SELECT shopify_order_id FROM orders").fetchall())
+        conn.close()
+
         count = sync_from_api(full=True)
+
+        # Auto-notify suppliers for new orders
+        _auto_notify_new_orders(existing_ids)
+
         return JSONResponse({"ok": True, "count": count, "source": "shopify_api"})
     except Exception as api_err:
         import traceback
@@ -400,6 +409,46 @@ def sync_orders():
             return JSONResponse({"ok": True, "count": count, "source": "csv", "api_error": str(api_err)})
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e), "api_error": str(api_err)}, status_code=500)
+
+
+def _auto_notify_new_orders(existing_ids_before_sync: set):
+    """Auto-notify suppliers for orders that appeared after sync."""
+    try:
+        conn = get_db()
+        new_orders = conn.execute(
+            "SELECT * FROM orders WHERE auto_notified != '1' AND status='nuevo' AND COALESCE(product_type,'joya')='joya'"
+        ).fetchall()
+        conn.close()
+
+        notified = 0
+        for row in new_orders:
+            order = dict(row)
+            # Only notify if this is genuinely new (wasn't in DB before sync)
+            if order.get("shopify_order_id") in existing_ids_before_sync:
+                continue
+
+            try:
+                result = notify_supplier("barto", order)
+                log_activity(order["id"], "Auto-notificación a Barto", result.get("email_subject", ""))
+
+                if float(order.get("lola_estimado", 0) or 0) > 0:
+                    result = notify_supplier("lola", order)
+                    log_activity(order["id"], "Auto-notificación a Lola", result.get("email_subject", ""))
+
+                update_order(order["id"], {
+                    "auto_notified": "1",
+                    "status": "notificado",
+                    "barto_notified_at": datetime.now().isoformat(),
+                })
+                notified += 1
+            except Exception as e:
+                log_activity(order["id"], "Error en auto-notificación", str(e))
+                print(f"Auto-notify failed for order {order['id']}: {e}")
+
+        if notified > 0:
+            print(f"Auto-notified suppliers for {notified} new orders")
+    except Exception as e:
+        print(f"Auto-notify batch failed: {e}")
 
 
 @app.post("/api/orders/test")

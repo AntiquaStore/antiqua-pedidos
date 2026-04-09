@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{# ── Status helpers ── #}
+{% set estado_labels = {
+    'nuevo': 'Nuevo',
+    'contactado': 'Contactado',
+    'cita_reservada': 'Cita reservada',
+    'compra': 'Compra',
+    'no_compra': 'No compra',
+    'cancelado': 'Cancelado'
+} %}
+{% set estado_colors = {
+    'nuevo': 'bg-[#5a7b9a]',
+    'contactado': 'bg-taupe',
+    'cita_reservada': 'bg-bronze',
+    'compra': 'bg-[#4a7c59]',
+    'no_compra': 'bg-[#9a5a5a]',
+    'cancelado': 'bg-secondary'
+} %}
+{% set via_labels = {
+    'instagram': 'Instagram',
+    'whatsapp': 'WhatsApp',
+    'web': 'Web',
+    'calendly': 'Calendly',
+    'otro': 'Otro'
+} %}
+
+<!-- Header -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+    <h1 class="text-2xl md:text-3xl text-dark">Leads</h1>
+    <button @click="$dispatch('open-lead-form')"
+            class="inline-flex items-center gap-2 px-5 py-2.5 bg-dark text-white text-xs uppercase tracking-widest font-semibold hover:bg-secondary transition-colors"
+            x-data>
+        + Nuevo Lead
+    </button>
+</div>
+
+<!-- Stats -->
+{% if stats %}
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+    <div class="bg-white border border-line p-4">
+        <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.total or 0 }}</p>
+        <p class="text-xs text-secondary mt-1 tracking-wide">Total leads</p>
+    </div>
+    <div class="bg-white border border-line p-4">
+        <p class="text-2xl font-bold text-[#4a7c59]" style="font-family: 'Libre Baskerville', serif;">{{ stats.by_estado.compra or 0 }}</p>
+        <p class="text-xs text-secondary mt-1 tracking-wide">Compras</p>
+    </div>
+    <div class="bg-white border border-line p-4">
+        <p class="text-2xl font-bold text-bronze" style="font-family: 'Libre Baskerville', serif;">{{ stats.by_estado.cita_reservada or 0 }}</p>
+        <p class="text-xs text-secondary mt-1 tracking-wide">Citas pendientes</p>
+    </div>
+    <div class="bg-white border border-line p-4">
+        <p class="text-2xl font-bold text-[#5a7b9a]" style="font-family: 'Libre Baskerville', serif;">{{ stats.by_estado.nuevo or 0 }}</p>
+        <p class="text-xs text-secondary mt-1 tracking-wide">Nuevos</p>
+    </div>
+    <div class="bg-white border border-line p-4">
+        <p class="text-2xl font-bold text-[#9a5a5a]" style="font-family: 'Libre Baskerville', serif;">{{ stats.by_estado.no_compra or 0 }}</p>
+        <p class="text-xs text-secondary mt-1 tracking-wide">No compra</p>
+    </div>
+    <div class="bg-white border border-line p-4">
+        <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.conversion_rate or 0 }}%</p>
+        <p class="text-xs text-secondary mt-1 tracking-wide">Conversi&oacute;n</p>
+    </div>
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="flex flex-wrap gap-3 mb-6">
+    <a href="/leads" class="px-4 py-2 text-xs uppercase tracking-widest font-semibold border {{ 'bg-dark text-white border-dark' if not current_estado else 'border-line text-secondary hover:text-dark' }} transition-colors">
+        Todos
+    </a>
+    {% for key, label in estado_labels.items() %}
+    <a href="/leads?estado={{ key }}{{ '&via=' + current_via if current_via else '' }}"
+       class="px-4 py-2 text-xs uppercase tracking-widest font-semibold border {{ 'bg-dark text-white border-dark' if current_estado == key else 'border-line text-secondary hover:text-dark' }} transition-colors">
+        {{ label }}
+    </a>
+    {% endfor %}
+</div>
+
+<!-- Search + Via filter -->
+<form method="GET" action="/leads" class="flex flex-wrap gap-3 mb-6">
+    {% if current_estado %}<input type="hidden" name="estado" value="{{ current_estado }}">{% endif %}
+    <select name="via" onchange="this.form.submit()" class="px-4 py-2 text-sm border border-line bg-white text-dark">
+        <option value="">Canal: Todos</option>
+        {% for key, label in via_labels.items() %}
+        <option value="{{ key }}" {{ 'selected' if current_via == key }}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <input type="text" name="search" value="{{ current_search }}" placeholder="Buscar nombre, email, tel..."
+           class="px-4 py-2 text-sm border border-line bg-white text-dark flex-1 min-w-[200px]">
+    <button type="submit" class="px-4 py-2 text-xs uppercase tracking-widest font-semibold border border-line text-dark hover:bg-white transition-colors">
+        Buscar
+    </button>
+</form>
+
+<!-- Leads Table -->
+<div class="bg-white border border-line overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="border-b border-line text-left">
+                <th class="px-4 py-3 text-xs uppercase tracking-widest text-secondary font-semibold">Nombre</th>
+                <th class="px-4 py-3 text-xs uppercase tracking-widest text-secondary font-semibold">Contacto</th>
+                <th class="px-4 py-3 text-xs uppercase tracking-widest text-secondary font-semibold">Canal</th>
+                <th class="px-4 py-3 text-xs uppercase tracking-widest text-secondary font-semibold">Tipo</th>
+                <th class="px-4 py-3 text-xs uppercase tracking-widest text-secondary font-semibold">Cita</th>
+                <th class="px-4 py-3 text-xs uppercase tracking-widest text-secondary font-semibold">Estado</th>
+                <th class="px-4 py-3 text-xs uppercase tracking-widest text-secondary font-semibold">Fecha</th>
+                <th class="px-4 py-3 text-xs uppercase tracking-widest text-secondary font-semibold"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for lead in leads %}
+            <tr class="border-b border-line hover:bg-cream/50 transition-colors" x-data="leadRow({{ lead | tojson }})">
+                <td class="px-4 py-3 font-medium text-dark">{{ lead.nombre or '-' }}</td>
+                <td class="px-4 py-3 text-secondary">
+                    {% if lead.email %}<div class="text-xs">{{ lead.email }}</div>{% endif %}
+                    {% if lead.telefono %}<div class="text-xs">{{ lead.telefono }}</div>{% endif %}
+                </td>
+                <td class="px-4 py-3">
+                    <span class="text-xs font-medium px-2 py-1 bg-cream text-secondary">
+                        {{ via_labels.get(lead.via_contacto, lead.via_contacto) }}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-xs text-secondary">
+                    {% if lead.tipo == 'cita_showroom' %}Cita showroom
+                    {% elif lead.tipo == 'asesoramiento' %}Asesoramiento
+                    {% elif lead.tipo == 'compra_directa' %}Compra directa
+                    {% else %}{{ lead.tipo }}{% endif %}
+                </td>
+                <td class="px-4 py-3 text-xs text-secondary">
+                    {% if lead.fecha_cita %}{{ lead.fecha_cita }}{% if lead.hora_cita %} {{ lead.hora_cita }}{% endif %}{% else %}-{% endif %}
+                </td>
+                <td class="px-4 py-3">
+                    <select @change="updateEstado($event.target.value)"
+                            class="text-xs font-semibold px-2 py-1 border-0 {{ estado_colors.get(lead.estado, 'bg-secondary') }} text-white cursor-pointer">
+                        {% for key, label in estado_labels.items() %}
+                        <option value="{{ key }}" {{ 'selected' if lead.estado == key }} class="bg-white text-dark">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td class="px-4 py-3 text-xs text-secondary">{{ lead.created_at[:10] if lead.created_at else '-' }}</td>
+                <td class="px-4 py-3">
+                    <button @click="showNotes = !showNotes" class="text-xs text-taupe hover:text-dark transition-colors">
+                        Notas
+                    </button>
+                </td>
+            </tr>
+            <!-- Notes row (hidden by default) -->
+            <tr x-show="showNotes" x-cloak class="bg-cream/30">
+                <td colspan="8" class="px-4 py-3">
+                    <div class="flex items-start gap-4">
+                        <textarea x-model="notes" @blur="saveNotes()" placeholder="A&ntilde;adir notas..."
+                                  class="flex-1 text-sm border border-line p-2 bg-white min-h-[60px]"></textarea>
+                        {% if lead.shopify_order_id %}
+                        <span class="text-xs text-[#4a7c59] font-medium">Pedido: {{ lead.shopify_order_id }}</span>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" class="px-4 py-8 text-center text-secondary">
+                    No hay leads{{ ' con estos filtros' if current_estado or current_via or current_search else '' }}.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- New Lead Modal -->
+<div x-data="leadForm()" @open-lead-form.window="open = true">
+    <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-dark/30">
+        <div @click.outside="open = false" class="bg-white border border-line p-8 w-full max-w-lg mx-4 shadow-lg">
+            <h2 class="text-xl text-dark mb-6" style="font-family: 'Libre Baskerville', serif;">Nuevo Lead</h2>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Nombre *</label>
+                    <input x-model="form.nombre" type="text" class="w-full px-4 py-2 border border-line text-sm" placeholder="Nombre completo">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Tel&eacute;fono</label>
+                        <input x-model="form.telefono" type="tel" class="w-full px-4 py-2 border border-line text-sm" placeholder="+34 600 000 000">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Email</label>
+                        <input x-model="form.email" type="email" class="w-full px-4 py-2 border border-line text-sm" placeholder="email@ejemplo.com">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Canal</label>
+                        <select x-model="form.via_contacto" class="w-full px-4 py-2 border border-line text-sm bg-white">
+                            <option value="instagram">Instagram</option>
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="web">Web</option>
+                            <option value="calendly">Calendly</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Tipo</label>
+                        <select x-model="form.tipo" class="w-full px-4 py-2 border border-line text-sm bg-white">
+                            <option value="cita_showroom">Cita showroom</option>
+                            <option value="asesoramiento">Asesoramiento</option>
+                            <option value="compra_directa">Compra directa</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Cita fields (shown when tipo = cita_showroom) -->
+                <div x-show="form.tipo === 'cita_showroom'" class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Fecha cita</label>
+                        <input x-model="form.fecha_cita" type="date" class="w-full px-4 py-2 border border-line text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Hora cita</label>
+                        <input x-model="form.hora_cita" type="time" class="w-full px-4 py-2 border border-line text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Notas</label>
+                    <textarea x-model="form.notas" class="w-full px-4 py-2 border border-line text-sm" rows="2" placeholder="Detalles adicionales..."></textarea>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="open = false" class="px-5 py-2.5 text-xs uppercase tracking-widest font-semibold border border-line text-secondary hover:text-dark transition-colors">
+                    Cancelar
+                </button>
+                <button @click="submit()" :disabled="!form.nombre" class="px-5 py-2.5 text-xs uppercase tracking-widest font-semibold bg-dark text-white hover:bg-secondary transition-colors disabled:opacity-50">
+                    Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function leadForm() {
+    return {
+        open: false,
+        form: {
+            nombre: '', telefono: '', email: '',
+            via_contacto: 'instagram', tipo: 'asesoramiento',
+            fecha_cita: '', hora_cita: '', notas: '', estado: 'nuevo'
+        },
+        async submit() {
+            const res = await fetch('/api/leads', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(this.form)
+            });
+            const data = await res.json();
+            if (data.ok) {
+                window.location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'desconocido'));
+            }
+        }
+    }
+}
+
+function leadRow(lead) {
+    return {
+        showNotes: false,
+        notes: lead.notas || '',
+        async updateEstado(newEstado) {
+            await fetch(`/api/leads/${lead.id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({estado: newEstado})
+            });
+            window.location.reload();
+        },
+        async saveNotes() {
+            await fetch(`/api/leads/${lead.id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({notas: this.notes})
+            });
+        }
+    }
+}
+</script>
+{% endblock %}
