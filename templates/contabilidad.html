@@ -80,26 +80,22 @@
         </div>
     </div>
 
-    <!-- Row 2: Total ingresos, Total gastos -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+    <!-- Row 2: Total ingresos, Total gastos, Resultado -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div class="bg-white border border-line p-5">
             <p class="text-2xl font-bold text-[#4a7c59] tabular-nums" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.2f}".format(stats.total_ingresos or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</p>
-            <p class="text-sm text-secondary mt-1 tracking-wide">Total ingresos (neto banco)</p>
+            <p class="text-sm text-secondary mt-1 tracking-wide">Total ingresos</p>
         </div>
         <div class="bg-white border border-line p-5">
             <p class="text-2xl font-bold text-red-600 tabular-nums" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.2f}".format(stats.total_gastos or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</p>
             <p class="text-sm text-secondary mt-1 tracking-wide">Total gastos</p>
         </div>
-    </div>
-
-    <!-- Row 3: Resultado neto -->
-    <div class="grid grid-cols-1 gap-4 mb-8">
-        <div class="bg-white border border-line p-6 text-center">
+        <div class="bg-white border border-line p-5">
             {% set resultado = stats.resultado or 0 %}
-            <p class="text-4xl font-bold tabular-nums {{ 'text-[#4a7c59]' if resultado >= 0 else 'text-red-600' }}" style="font-family: 'Libre Baskerville', serif;">
+            <p class="text-2xl font-bold tabular-nums {{ 'text-[#4a7c59]' if resultado >= 0 else 'text-red-600' }}" style="font-family: 'Libre Baskerville', serif;">
                 {{ "{:,.2f}".format(resultado)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;
             </p>
-            <p class="text-sm text-secondary mt-2 tracking-wide">Resultado neto</p>
+            <p class="text-sm text-secondary mt-1 tracking-wide">Resultado neto</p>
         </div>
     </div>
 
@@ -348,6 +344,10 @@
         <div class="border-2 border-dashed border-taupe/40 p-4">
             <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{% if (stats.efectivo_count or 0) > 0 %}{{ "{:,.0f}".format((stats.ingresos_efectivo or 0) / stats.efectivo_count)|replace(",", ".") }} &euro;{% else %}0 &euro;{% endif %}</p>
             <p class="text-[11px] text-secondary">Ticket medio B</p>
+        </div>
+        <div class="border-2 border-dashed border-taupe/40 p-4 bg-[#f8f7f5]">
+            <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format((stats.total_ingresos or 0) + (stats.ingresos_efectivo or 0))|replace(",", ".") }} &euro;</p>
+            <p class="text-[11px] text-secondary">Total A+B</p>
         </div>
     </div>
 
