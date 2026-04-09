@@ -205,8 +205,76 @@
 </div>
 {% endif %}
 
-<!-- Orders table -->
-<div class="bg-white border border-line overflow-hidden">
+<!-- Orders: MOBILE CARDS (visible < md) -->
+<div class="md:hidden space-y-3">
+    {% if orders %}
+        {% for order in orders %}
+        {% set gw_m = (order.payment_gateway or '')|lower %}
+        {% set ep_m = order.estado_pago or 'pendiente' %}
+        {% set is_auto_paid_m = gw_m and ('shopify' in gw_m or 'paypal' in gw_m or 'klarna' in gw_m or 'stripe' in gw_m or 'redsys' in gw_m or 'efectivo' in gw_m) %}
+        <div class="bg-white border border-line p-4">
+            <!-- Row 1: Pieza + PVP -->
+            <div class="flex items-start justify-between mb-2">
+                <div class="flex-1 min-w-0">
+                    <a href="/order/{{ order.id }}" class="text-sm font-semibold text-dark hover:text-bronze">{{ order.product_name or '-' }}</a>
+                    {% if order.ring_size %}<span class="text-xs text-secondary ml-1">T.{{ order.ring_size }}</span>{% endif %}
+                    {% if order._incluir_joyero is defined and order._incluir_joyero %}
+                    <span class="ml-1 inline-block px-1 py-0.5 text-[9px] font-semibold bg-taupe/10 text-taupe border border-taupe/30">Joyero</span>
+                    {% endif %}
+                    {% if order.urgente == '1' %}
+                    <span class="ml-1 inline-block px-1 py-0.5 text-[9px] font-semibold bg-red-100 text-red-700">Urgente</span>
+                    {% endif %}
+                </div>
+                <span class="text-sm font-semibold text-dark tabular-nums ml-2">{{ "{:,.0f}".format(order.pvp or 0)|replace(",", ".") }} &euro;</span>
+            </div>
+            <!-- Row 2: Cliente + Pedido + Fecha -->
+            <div class="flex items-center justify-between text-xs text-secondary mb-3">
+                <span>{{ order.customer_name or '-' }}</span>
+                <span>{{ order.shopify_order_number or '' }} &middot; {% if order.fecha_pedido %}{{ order.fecha_pedido[8:10] }}/{{ order.fecha_pedido[5:7] }}{% endif %}</span>
+            </div>
+            <!-- Row 3: Pago + Estado (side by side, full width, tappable) -->
+            <div class="flex gap-2">
+                <!-- Pago -->
+                <div class="flex-1">
+                    {% if is_auto_paid_m %}
+                    <div class="text-center py-2 bg-green-50 text-[#4a7c59] text-xs font-semibold">Pagado</div>
+                    {% else %}
+                    <select x-data="pagoChanger('{{ order.id }}', '{{ ep_m }}')"
+                            @change="changePago($event.target.value)"
+                            class="w-full text-xs font-semibold py-2 px-2 border border-line cursor-pointer {{ 'text-[#4a7c59] bg-green-50' if ep_m == 'pagado' else 'text-amber-700 bg-amber-50' }}"
+                            style="border-radius: 0; min-height: 40px;">
+                        <option value="pendiente" {{ 'selected' if ep_m != 'pagado' }} style="background:white;color:#212121;">Pago pendiente</option>
+                        <option value="pagado" {{ 'selected' if ep_m == 'pagado' }} style="background:white;color:#212121;">Pagado</option>
+                    </select>
+                    {% endif %}
+                </div>
+                <!-- Estado -->
+                <div class="flex-1" x-data="statusChanger('{{ order.id }}', '{{ order.status }}', '{{ order.ring_size or '' }}')">
+                    <select @change="changeStatus($event.target.value)"
+                            :disabled="saving"
+                            class="w-full text-xs uppercase tracking-wide font-semibold text-white py-2 px-2 border-0 cursor-pointer {{ status_colors.get(order.status, 'bg-secondary') }}"
+                            style="border-radius: 0; min-height: 40px;">
+                        {% for val, label in status_options %}
+                        <option value="{{ val }}" {{ 'selected' if order.status == val }} style="background: white; color: #212121; text-transform: none;">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            {% if order.status in ('en_taller', 'notificado') and order.fase_produccion and order.fase_produccion != 'pendiente' %}
+            {% set fase_labels_m = {'prototipado':'Prototipado', 'fundido':'Fundido', 'repaso':'Repaso', 'engaste':'Engaste', 'repaso_final':'Repaso final', 'terminado':'Terminado'} %}
+            <div class="mt-2 text-[10px] font-medium text-bronze">Fase: {{ fase_labels_m.get(order.fase_produccion, order.fase_produccion) }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="bg-white border border-line px-5 py-12 text-center">
+            <p class="text-secondary text-sm">No hay pedidos</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Orders: DESKTOP TABLE (visible >= md) -->
+<div class="hidden md:block bg-white border border-line overflow-hidden">
     <div class="overflow-x-auto">
         <table class="w-full min-w-[800px]">
             <thead>
