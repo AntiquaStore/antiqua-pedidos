@@ -191,6 +191,9 @@
                                 {% elif order.is_partial_payment == '1' or order.is_partial_payment == 1 %}
                                 <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-amber-100 text-amber-700 border border-amber-200">Pago parcial</span>
                                 {% endif %}
+                                {% if (order.pvp or 0) >= 2500 and (order.product_type or 'joya') != 'joyero' %}
+                                <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-taupe/10 text-taupe border border-taupe/30">Incluir joyero</span>
+                                {% endif %}
                             </div>
                         </td>
                         <td class="px-5 py-4 text-sm text-secondary">{{ order.ring_size or '-' }}</td>
