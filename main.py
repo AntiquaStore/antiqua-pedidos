@@ -33,7 +33,7 @@ from gold_price import get_gold_info, get_18k_gold_price, get_current_gold_price
 # Config
 # ---------------------------------------------------------------------------
 PORT = int(os.getenv("PORT", 8000))
-DEFAULT_GOLD_PRICE = float(os.getenv("GOLD_PRICE_PER_GRAM", 92.0))
+DEFAULT_GOLD_PRICE = float(os.getenv("GOLD_PRICE_PER_GRAM", 160.0))
 
 # ---------------------------------------------------------------------------
 # App

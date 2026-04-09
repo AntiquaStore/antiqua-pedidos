@@ -184,7 +184,7 @@ def sync_from_api(full=False):
     else:
         orders = fetch_orders_api(since_id=last_id if last_id != "0" else None)
 
-    gold_price = float(models.get_setting("gold_price", os.getenv("GOLD_PRICE_PER_GRAM", "92.0")))
+    gold_price = float(models.get_setting("gold_price", os.getenv("GOLD_PRICE_PER_GRAM", "160.0")))
     count = 0
 
     for order in orders:
@@ -253,7 +253,7 @@ def sync_from_csv(csv_path: str = None):
         print(f"CSV not found: {csv_path}")
         return 0
 
-    gold_price = float(models.get_setting("gold_price", os.getenv("GOLD_PRICE_PER_GRAM", "92.0")))
+    gold_price = float(models.get_setting("gold_price", os.getenv("GOLD_PRICE_PER_GRAM", "160.0")))
     count = 0
 
     with open(csv_path, encoding="utf-8") as f:
