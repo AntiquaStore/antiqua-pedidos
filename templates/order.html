@@ -463,6 +463,58 @@
 {% endif %}
 
 {# ══════════════════════════════════════════════════════════════
+   5b. FECHA DE ENTREGA PERSONALIZADA
+   ══════════════════════════════════════════════════════════════ #}
+<div class="bg-white border border-line p-6 mb-8" x-data="{
+    saving: false,
+    fecha: '{{ order.fecha_entrega_custom or '' }}',
+    urgente: {{ 'true' if order.urgente == '1' else 'false' }},
+    async save() {
+        this.saving = true;
+        const res = await fetch('/api/orders/{{ order.id }}', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                fecha_entrega_custom: this.fecha || null,
+                urgente: this.urgente ? '1' : '0'
+            })
+        });
+        if (res.ok) window.location.reload();
+        else alert('Error al guardar');
+        this.saving = false;
+    }
+}">
+    <h2 class="text-lg mb-4 text-dark" style="font-family: 'Libre Baskerville', serif;">Fecha de entrega</h2>
+    <div class="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+        <div>
+            <label class="block text-xs uppercase tracking-wider text-secondary font-semibold mb-1">Fecha entrega personalizada</label>
+            <input type="date" x-model="fecha"
+                   class="border border-line px-3 py-2 text-sm text-dark bg-white focus:outline-none focus:border-taupe"
+                   style="border-radius: 0;">
+            <p class="text-xs text-secondary mt-1">Dejar vac&iacute;o = 18 d&iacute;as h&aacute;biles desde notificaci&oacute;n</p>
+        </div>
+        <div>
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" x-model="urgente" class="w-4 h-4 accent-red-600">
+                <span class="text-sm font-semibold text-red-600 uppercase tracking-wide">URGENTE</span>
+            </label>
+            <p class="text-xs text-secondary mt-1">Barto y Lola lo ver&aacute;n como prioritario</p>
+        </div>
+        <button @click="save()" :disabled="saving"
+                class="px-5 py-2 bg-dark text-white text-xs uppercase tracking-widest font-semibold hover:bg-secondary transition-colors disabled:opacity-50"
+                style="border-radius: 0;">
+            <span x-show="!saving">Guardar</span>
+            <span x-show="saving" x-cloak>Guardando&hellip;</span>
+        </button>
+    </div>
+    {% if order.fecha_entrega_custom %}
+    <p class="mt-3 text-sm text-dark">Entrega prevista: <strong>{{ order.fecha_entrega_custom }}</strong>
+        {% if order.urgente == '1' %}<span class="ml-2 px-2 py-0.5 text-xs font-bold bg-red-100 text-red-700 border border-red-200 uppercase">Urgente</span>{% endif %}
+    </p>
+    {% endif %}
+</div>
+
+{# ══════════════════════════════════════════════════════════════
    6. STATUS CHANGE BUTTONS
    ══════════════════════════════════════════════════════════════ #}
 {% set transitions = {

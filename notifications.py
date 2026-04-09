@@ -100,8 +100,15 @@ def fecha_es(fecha_iso: str) -> str:
         return fecha_iso
 
 
-def fecha_limite_entrega() -> str:
-    """Calculate delivery deadline: 18 business days from today."""
+def fecha_limite_entrega(order: dict = None) -> str:
+    """Calculate delivery deadline. Uses custom date if set, otherwise 18 business days."""
+    custom = order.get("fecha_entrega_custom", "") if order else ""
+    if custom:
+        try:
+            d = date.fromisoformat(custom)
+            return f"{d.day} de {MESES[d.month - 1]}"
+        except ValueError:
+            pass
     deadline = add_business_days(date.today(), 18)
     return f"{deadline.day} de {MESES[deadline.month - 1]}"
 
@@ -111,18 +118,22 @@ def email_template_barto(order: dict) -> tuple:
     piece = order.get("product_name", "Pieza")
     size = order.get("ring_size", "")
     fecha_pedido = order.get("fecha_pedido", "")
-    fecha = fecha_limite_entrega()
+    fecha = fecha_limite_entrega(order)
     peso = order.get("peso_estimado", 0)
     diamantes = order.get("diamantes_desc", "")
+    es_urgente = order.get("urgente") == "1"
 
     order_num = order.get("shopify_order_number", "")
-    subject = f"Nuevo pedido Antiqua {order_num} - {piece}"
-    lines = [
-        "Hola Barto, podemos poner en marcha:",
-        "",
-        f"Nuevo pedido Antiqua {order_num} ({fecha_es(fecha_pedido)}):",
-        f"- {piece}",
-    ]
+    urgente_tag = "URGENTE - " if es_urgente else ""
+    subject = f"{urgente_tag}Nuevo pedido Antiqua {order_num} - {piece}"
+    lines = []
+    if es_urgente:
+        lines.append("*** PEDIDO URGENTE ***")
+        lines.append("")
+    lines.append("Hola Barto, podemos poner en marcha:")
+    lines.append("")
+    lines.append(f"Nuevo pedido Antiqua {order_num} ({fecha_es(fecha_pedido)}):")
+    lines.append(f"- {piece}")
     if size:
         lines.append(f"- Talla: {size}")
     if peso:
@@ -130,6 +141,8 @@ def email_template_barto(order: dict) -> tuple:
     if diamantes and diamantes != "-":
         lines.append(f"- Diamantes: {diamantes}")
     lines.append(f"- Entrega limite: {fecha}")
+    if es_urgente:
+        lines.append("- PRIORIDAD MAXIMA")
     lines.append("")
     lines.append("Mima - Asistente de Antiqua")
 
@@ -153,17 +166,20 @@ def whatsapp_template_barto(order: dict) -> str:
     piece = order.get("product_name", "Pieza")
     size = order.get("ring_size", "")
     fecha_pedido = order.get("fecha_pedido", "")
-    fecha = fecha_limite_entrega()
+    fecha = fecha_limite_entrega(order)
     peso = order.get("peso_estimado", 0)
     diamantes = order.get("diamantes_desc", "")
     order_num = order.get("shopify_order_number", "")
+    es_urgente = order.get("urgente") == "1"
 
-    lines = [
-        "Hola Barto, podemos poner en marcha:",
-        "",
-        f"Nuevo pedido Antiqua {order_num} ({fecha_es(fecha_pedido)}):",
-        f"- {piece}",
-    ]
+    lines = []
+    if es_urgente:
+        lines.append("*** PEDIDO URGENTE ***")
+        lines.append("")
+    lines.append("Hola Barto, podemos poner en marcha:")
+    lines.append("")
+    lines.append(f"Nuevo pedido Antiqua {order_num} ({fecha_es(fecha_pedido)}):")
+    lines.append(f"- {piece}")
     if size:
         lines.append(f"- Talla: {size}")
     if peso:
@@ -171,6 +187,8 @@ def whatsapp_template_barto(order: dict) -> str:
     if diamantes and diamantes != "-":
         lines.append(f"- Diamantes: {diamantes}")
     lines.append(f"- Entrega limite: {fecha}")
+    if es_urgente:
+        lines.append("- PRIORIDAD MAXIMA")
     lines.append("")
     lines.append("Mima - Asistente de Antiqua")
     return "\n".join(lines)

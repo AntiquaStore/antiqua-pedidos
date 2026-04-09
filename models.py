@@ -111,6 +111,12 @@ def init_db():
         ("piedras_entregadas_at", "TEXT"),
         ("joya_terminada", "TEXT DEFAULT '0'"),
         ("joya_terminada_at", "TEXT"),
+        ("fecha_entrega_custom", "TEXT"),
+        ("urgente", "TEXT DEFAULT '0'"),
+        ("fase_produccion", "TEXT DEFAULT 'pendiente'"),
+        ("fase_updated_at", "TEXT"),
+        ("auto_notified", "TEXT DEFAULT '0'"),
+        ("lead_id", "INTEGER"),
     ]:
         try:
             conn.execute(f"ALTER TABLE orders ADD COLUMN {col} {coltype}")
@@ -165,6 +171,24 @@ def init_db():
         importe REAL,
         notas TEXT,
         created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS leads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT,
+        telefono TEXT,
+        email TEXT,
+        via_contacto TEXT DEFAULT 'otro',
+        tipo TEXT DEFAULT 'asesoramiento',
+        fecha_cita TEXT,
+        hora_cita TEXT,
+        estado TEXT DEFAULT 'nuevo',
+        notas TEXT,
+        shopify_order_id TEXT,
+        converted_at TEXT,
+        calendly_event_id TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        updated_at TEXT
     );
     """)
 
@@ -354,8 +378,9 @@ def get_dashboard_stats():
         "SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND (payment_group IS NULL OR payment_group = '')"
     ).fetchone()["c"]
     joyas_count = joyas_grouped + joyas_ungrouped
+    # Solo joyeros vendidos realmente (PVP > 0), no regalos con pedidos >= 2500
     joyeros_count = conn.execute(
-        "SELECT COUNT(*) as c FROM orders WHERE product_type = 'joyero'"
+        "SELECT COUNT(*) as c FROM orders WHERE product_type = 'joyero' AND pvp > 0"
     ).fetchone()["c"]
     cadenas_count = conn.execute(
         "SELECT COUNT(*) as c FROM orders WHERE product_type = 'cadena'"
@@ -734,6 +759,160 @@ def get_accounting_stats(month=None, from_month=None, to_month=None):
         "total_cobrado_banco": total_cobrado_banco,
         "desviacion": desviacion,
     }
+
+
+# ── Leads CRUD ──
+def insert_lead(data: dict) -> int:
+    conn = get_db()
+    now = datetime.datetime.now().isoformat()
+    data["created_at"] = now
+    data["updated_at"] = now
+    cols = ", ".join(data.keys())
+    placeholders = ", ".join(["?"] * len(data))
+    cur = conn.execute(f"INSERT INTO leads ({cols}) VALUES ({placeholders})", list(data.values()))
+    conn.commit()
+    lead_id = cur.lastrowid
+    conn.close()
+    return lead_id
+
+
+def get_lead(lead_id: int):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM leads WHERE id=?", (lead_id,)).fetchone()
+    conn.close()
+    return row_to_dict(row)
+
+
+def get_all_leads(estado=None, via=None, search=None):
+    conn = get_db()
+    sql = "SELECT * FROM leads WHERE 1=1"
+    params = []
+    if estado and estado != "todos":
+        sql += " AND estado=?"
+        params.append(estado)
+    if via and via != "todos":
+        sql += " AND via_contacto=?"
+        params.append(via)
+    if search:
+        sql += " AND (nombre LIKE ? OR email LIKE ? OR telefono LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+    sql += " ORDER BY created_at DESC"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return rows_to_list(rows)
+
+
+def update_lead(lead_id: int, data: dict):
+    conn = get_db()
+    data["updated_at"] = datetime.datetime.now().isoformat()
+    sets = ", ".join([f"{k}=?" for k in data])
+    conn.execute(f"UPDATE leads SET {sets} WHERE id=?", list(data.values()) + [lead_id])
+    conn.commit()
+    conn.close()
+
+
+def get_lead_stats():
+    conn = get_db()
+    total = conn.execute("SELECT COUNT(*) as c FROM leads").fetchone()["c"]
+    by_estado = {}
+    for estado in ['nuevo', 'contactado', 'cita_reservada', 'compra', 'no_compra', 'cancelado']:
+        by_estado[estado] = conn.execute("SELECT COUNT(*) as c FROM leads WHERE estado=?", (estado,)).fetchone()["c"]
+    by_via = {}
+    for via in ['instagram', 'whatsapp', 'web', 'calendly', 'otro']:
+        by_via[via] = conn.execute("SELECT COUNT(*) as c FROM leads WHERE via_contacto=?", (via,)).fetchone()["c"]
+
+    compras = by_estado.get('compra', 0)
+    conversion_rate = (compras / total * 100) if total > 0 else 0
+
+    conn.close()
+    return {
+        "total": total,
+        "by_estado": by_estado,
+        "by_via": by_via,
+        "conversion_rate": round(conversion_rate, 1),
+    }
+
+
+def normalize_phone(phone: str) -> str:
+    """Normalize phone for matching: strip spaces, dashes, country prefix."""
+    if not phone:
+        return ""
+    import re
+    phone = re.sub(r'[\s\-\(\)\.]', '', phone)
+    # Remove common Spanish prefixes
+    if phone.startswith('+34'):
+        phone = phone[3:]
+    elif phone.startswith('0034'):
+        phone = phone[4:]
+    elif phone.startswith('34') and len(phone) > 9:
+        phone = phone[2:]
+    return phone
+
+
+def match_lead_to_order(customer_email: str, customer_phone: str, customer_name: str) -> int | None:
+    """Find a lead that matches the given customer data. Returns lead_id or None."""
+    conn = get_db()
+    lead = None
+
+    # 1. Exact email match (most reliable)
+    if customer_email:
+        lead = conn.execute(
+            "SELECT id FROM leads WHERE LOWER(email)=LOWER(?) AND estado NOT IN ('compra','cancelado') ORDER BY created_at DESC LIMIT 1",
+            (customer_email,)
+        ).fetchone()
+
+    # 2. Phone match (normalized)
+    if not lead and customer_phone:
+        norm_phone = normalize_phone(customer_phone)
+        if norm_phone:
+            all_leads = conn.execute(
+                "SELECT id, telefono FROM leads WHERE estado NOT IN ('compra','cancelado') AND telefono IS NOT NULL AND telefono != ''"
+            ).fetchall()
+            for l in all_leads:
+                if normalize_phone(l["telefono"]) == norm_phone:
+                    lead = l
+                    break
+
+    # 3. Name match (fuzzy - only if exact-ish)
+    if not lead and customer_name:
+        name_parts = customer_name.lower().strip().split()
+        if len(name_parts) >= 2:
+            lead = conn.execute(
+                "SELECT id FROM leads WHERE LOWER(nombre) LIKE ? AND LOWER(nombre) LIKE ? AND estado NOT IN ('compra','cancelado') ORDER BY created_at DESC LIMIT 1",
+                (f"%{name_parts[0]}%", f"%{name_parts[-1]}%")
+            ).fetchone()
+
+    conn.close()
+    return lead["id"] if lead else None
+
+
+def convert_lead(lead_id: int, shopify_order_id: str):
+    """Mark a lead as converted to purchase."""
+    now = datetime.datetime.now().isoformat()
+    update_lead(lead_id, {
+        "estado": "compra",
+        "shopify_order_id": shopify_order_id,
+        "converted_at": now,
+    })
+
+
+# ── Production phases ──
+PRODUCTION_PHASES = ['pendiente', 'prototipado', 'fundido', 'repaso', 'engaste', 'repaso_final', 'terminado']
+
+
+def advance_production_phase(order_id: int, new_phase: str):
+    """Update production phase for an order."""
+    if new_phase not in PRODUCTION_PHASES:
+        raise ValueError(f"Fase no válida: {new_phase}")
+    conn = get_db()
+    now = datetime.datetime.now().isoformat()
+    conn.execute(
+        "UPDATE orders SET fase_produccion=?, fase_updated_at=?, updated_at=? WHERE id=?",
+        (new_phase, now, now, order_id)
+    )
+    conn.commit()
+    conn.close()
+    log_activity(order_id, f"Fase de producción: {new_phase}", f"Actualizado el {now}")
 
 
 if __name__ == "__main__":

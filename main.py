@@ -21,6 +21,9 @@ from models import (
     insert_bank_entry, get_bank_entries, update_bank_entry,
     insert_cash_sale, get_cash_sales, delete_cash_sale,
     get_accounting_stats,
+    insert_lead, get_lead, get_all_leads, update_lead, get_lead_stats,
+    match_lead_to_order, convert_lead, advance_production_phase,
+    PRODUCTION_PHASES,
 )
 from bank_reconciliation import parse_bank_csv, categorize_entry, match_with_orders
 from catalog import load_catalog, estimate_costs
@@ -664,6 +667,202 @@ def reset_bank_entries():
     count = conn.execute("SELECT changes()").fetchone()[0]
     conn.close()
     return JSONResponse({"ok": True, "deleted": count})
+
+# ---------------------------------------------------------------------------
+# Leads (CRM)
+# ---------------------------------------------------------------------------
+@app.get("/leads", dependencies=[Depends(require_auth)])
+def leads_page(request: Request, estado: str = None, via: str = None, search: str = None):
+    try:
+        leads = get_all_leads(estado=estado, via=via, search=search)
+        stats = get_lead_stats()
+        return templates.TemplateResponse(name="leads.html", request=request, context={
+            "leads": leads,
+            "stats": stats,
+            "current_estado": estado or "",
+            "current_via": via or "",
+            "current_search": search or "",
+        })
+    except Exception as e:
+        return templates.TemplateResponse(name="leads.html", request=request, context={
+            "leads": [],
+            "stats": {},
+            "current_estado": "",
+            "current_via": "",
+            "current_search": "",
+            "error": str(e),
+        })
+
+
+@app.post("/api/leads", dependencies=[Depends(require_auth)])
+async def create_lead(request: Request):
+    try:
+        data = await request.json()
+        lead_data = {
+            "nombre": data.get("nombre", "").strip(),
+            "telefono": data.get("telefono", "").strip(),
+            "email": data.get("email", "").strip(),
+            "via_contacto": data.get("via_contacto", "otro"),
+            "tipo": data.get("tipo", "asesoramiento"),
+            "fecha_cita": data.get("fecha_cita", ""),
+            "hora_cita": data.get("hora_cita", ""),
+            "notas": data.get("notas", ""),
+            "estado": data.get("estado", "nuevo"),
+        }
+        lead_id = insert_lead(lead_data)
+        return JSONResponse({"ok": True, "lead_id": lead_id})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.put("/api/leads/{lead_id}")
+async def update_lead_endpoint(lead_id: int, request: Request):
+    try:
+        data = await request.json()
+        update_lead(lead_id, data)
+        updated = get_lead(lead_id)
+        return JSONResponse({"ok": True, "lead": updated})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/leads/{lead_id}/link-order")
+async def link_lead_to_order(lead_id: int, request: Request):
+    """Manually link a lead to a Shopify order."""
+    try:
+        data = await request.json()
+        shopify_order_id = data.get("shopify_order_id", "")
+        if not shopify_order_id:
+            return JSONResponse({"ok": False, "error": "Falta shopify_order_id"}, status_code=400)
+        convert_lead(lead_id, shopify_order_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/leads/stats")
+def leads_stats_endpoint():
+    try:
+        return JSONResponse(get_lead_stats())
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
+# Webhooks (Calendly, Shopify)
+# ---------------------------------------------------------------------------
+@app.post("/api/webhooks/calendly")
+async def calendly_webhook(request: Request):
+    """Receive Calendly invitee.created events and auto-create leads."""
+    try:
+        body = await request.json()
+        event_type = body.get("event", "")
+        if event_type != "invitee.created":
+            return JSONResponse({"ok": True, "skipped": True})
+
+        payload = body.get("payload", {})
+        invitee = payload.get("invitee", payload)
+        name = invitee.get("name", "") or payload.get("name", "")
+        email = invitee.get("email", "") or payload.get("email", "")
+
+        # Extract event time
+        event_info = payload.get("event", {}) or payload.get("scheduled_event", {})
+        start_time = ""
+        if isinstance(event_info, dict):
+            start_time = event_info.get("start_time", "") or event_info.get("start", "")
+
+        fecha_cita = ""
+        hora_cita = ""
+        if start_time and len(start_time) >= 16:
+            fecha_cita = start_time[:10]
+            hora_cita = start_time[11:16]
+
+        calendly_event_id = payload.get("uri", "") or payload.get("event_uri", "")
+
+        lead_data = {
+            "nombre": name,
+            "email": email,
+            "telefono": "",
+            "via_contacto": "calendly",
+            "tipo": "cita_showroom",
+            "estado": "cita_reservada",
+            "fecha_cita": fecha_cita,
+            "hora_cita": hora_cita,
+            "calendly_event_id": calendly_event_id,
+            "notas": f"Reserva automática desde Calendly",
+        }
+        lead_id = insert_lead(lead_data)
+        return JSONResponse({"ok": True, "lead_id": lead_id})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/webhooks/shopify/order-created")
+async def shopify_order_webhook(request: Request):
+    """Receive Shopify order/create webhooks for real-time processing."""
+    try:
+        body = await request.json()
+        # Sync this specific order
+        from shopify_client import process_webhook_order
+        order_ids = process_webhook_order(body)
+
+        # Auto-match leads and auto-notify suppliers
+        for oid in order_ids:
+            order = get_order(oid)
+            if not order:
+                continue
+
+            # Auto-match lead
+            lead_id = match_lead_to_order(
+                order.get("customer_email", ""),
+                order.get("customer_phone", ""),
+                order.get("customer_name", "")
+            )
+            if lead_id:
+                convert_lead(lead_id, order.get("shopify_order_id", ""))
+                update_order(oid, {"lead_id": lead_id})
+                log_activity(oid, "Lead convertido automáticamente", f"Lead #{lead_id}")
+
+            # Auto-notify suppliers (if joya and not already notified)
+            if order.get("product_type", "joya") == "joya" and order.get("auto_notified") != "1":
+                try:
+                    result = notify_supplier("barto", order)
+                    log_activity(oid, "Auto-notificación a Barto", result.get("email_subject", ""))
+                    if float(order.get("lola_estimado", 0) or 0) > 0:
+                        result = notify_supplier("lola", order)
+                        log_activity(oid, "Auto-notificación a Lola", result.get("email_subject", ""))
+                    update_order(oid, {
+                        "auto_notified": "1",
+                        "status": "notificado",
+                        "barto_notified_at": datetime.now().isoformat(),
+                    })
+                except Exception as notify_err:
+                    log_activity(oid, "Error en auto-notificación", str(notify_err))
+
+        return JSONResponse({"ok": True, "processed": len(order_ids)})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
+# Production Phases (Barto portal)
+# ---------------------------------------------------------------------------
+@app.post("/proveedor/barto/fase/{order_id}")
+async def barto_update_phase(request: Request, order_id: int):
+    """Barto updates production phase for an order."""
+    try:
+        form = await request.form()
+        new_phase = form.get("fase", "")
+        advance_production_phase(order_id, new_phase)
+
+        # If phase is 'terminado', also mark joya as finished
+        if new_phase == "terminado":
+            mark_joya_terminada(order_id)
+
+        return RedirectResponse(url="/proveedor/barto", status_code=302)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ---------------------------------------------------------------------------
 # Contabilidad (Accounting)

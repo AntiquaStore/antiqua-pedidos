@@ -88,8 +88,13 @@
                             </thead>
                             <tbody>
                                 {% for order in pending %}
-                                <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
-                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.shopify_order_number or order.id }}</td>
+                                <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors {{ 'bg-red-50/50' if order.urgente == '1' }}">
+                                    <td class="px-4 py-3 text-sm text-secondary">
+                                        {{ order.shopify_order_number or order.id }}
+                                        {% if order.urgente == '1' %}
+                                        <span class="ml-1 inline-block px-1.5 py-0.5 text-[9px] font-bold bg-red-600 text-white uppercase">URGENTE</span>
+                                        {% endif %}
+                                    </td>
                                     <td class="px-4 py-3 text-sm text-dark font-medium">{{ order.product_name or '-' }}</td>
                                     <td class="px-4 py-3 text-sm text-secondary text-center">{{ order.ring_size or '-' }}</td>
                                     <td class="px-4 py-3 text-sm font-semibold
@@ -200,8 +205,13 @@
                             </thead>
                             <tbody>
                                 {% for order in pending %}
-                                <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors">
-                                    <td class="px-4 py-3 text-sm text-secondary">{{ order.shopify_order_number or order.id }}</td>
+                                <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors {{ 'bg-red-50/50' if order.urgente == '1' }}">
+                                    <td class="px-4 py-3 text-sm text-secondary">
+                                        {{ order.shopify_order_number or order.id }}
+                                        {% if order.urgente == '1' %}
+                                        <span class="ml-1 inline-block px-1.5 py-0.5 text-[9px] font-bold bg-red-600 text-white uppercase">URGENTE</span>
+                                        {% endif %}
+                                    </td>
                                     <td class="px-4 py-3 text-sm text-dark font-medium">{{ order.product_name or '-' }}</td>
                                     <td class="px-4 py-3 text-sm text-secondary">{{ order.piedras_desc or 'Piedras de color' }}</td>
                                     <td class="px-4 py-3 text-center">
