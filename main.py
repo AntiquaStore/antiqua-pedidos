@@ -455,6 +455,12 @@ async def create_manual_order(request: Request):
 
         estimates = estimate_costs(product, pvp) or {}
 
+        metodo_pago = body.get("metodo_pago", "transferencia")
+        # Efectivo: always mark as paid (cash received at point of sale)
+        estado_pago = body.get("estado_pago", "pendiente")
+        if metodo_pago == "efectivo":
+            estado_pago = "pagado"
+
         data = {
             "shopify_order_id": f"MANUAL-{int(__import__('time').time())}",
             "shopify_order_number": "N/A",
@@ -468,8 +474,8 @@ async def create_manual_order(request: Request):
             "variant": "",
             "fecha_pedido": d.today().isoformat(),
             "pvp": pvp,
-            "payment_gateway": body.get("metodo_pago", "transferencia"),
-            "estado_pago": body.get("estado_pago", "pendiente"),
+            "payment_gateway": metodo_pago,
+            "estado_pago": estado_pago,
             "notes": body.get("notes", "").strip(),
             "status": "nuevo",
             **estimates,
@@ -914,6 +920,32 @@ def leads_page(request: Request, estado: str = None, via: str = None, search: st
             "current_search": "",
             "error": str(e),
         })
+
+
+@app.post("/api/leads/web")
+async def create_lead_web(request: Request):
+    """Public endpoint for web contact form (no auth). Accepts form data."""
+    try:
+        form = await request.form()
+        nombre = form.get("nombre", "").strip()
+        apellido = form.get("apellido", "").strip()
+        full_name = f"{nombre} {apellido}".strip()
+        lead_data = {
+            "nombre": full_name,
+            "telefono": form.get("telefono", "").strip(),
+            "email": form.get("email", "").strip(),
+            "via_contacto": form.get("via", "web"),
+            "tipo": "asesoramiento",
+            "notas": f"LOPD: {'si' if form.get('lopd') else 'no'}, Comercial: {'si' if form.get('comercial') else 'no'}",
+        }
+        lead_id = insert_lead(lead_data)
+        log_activity(None, "Nuevo lead web", f"Lead #{lead_id}: {full_name} ({lead_data['email']})")
+        redirect_url = form.get("redirect", "https://antiqua.store")
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=redirect_url, status_code=302)
+    except Exception as e:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="https://antiqua.store?error=1", status_code=302)
 
 
 @app.post("/api/leads", dependencies=[Depends(require_auth)])

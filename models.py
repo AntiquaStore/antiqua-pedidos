@@ -441,7 +441,7 @@ def get_dashboard_stats():
 
     total = conn.execute("SELECT COUNT(*) as c FROM orders").fetchone()["c"]
     pending = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status NOT IN ('enviado','archivado','entregado','completado')").fetchone()["c"]
-    in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status IN ('en_taller','notificado')").fetchone()["c"]
+    in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status IN ('en_taller','notificado') AND COALESCE(product_type,'joya') != 'joyero'").fetchone()["c"]
     revenue = conn.execute(f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE 1=1 {gift_exclude}").fetchone()["s"]
 
     # Joyas count (excluding gift joyeros)
@@ -496,18 +496,33 @@ def get_dashboard_stats():
     current_month = now.strftime("%Y-%m")
     current_year = now.strftime("%Y")
 
-    ventas_mes = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? {gift_exclude}",
+    # Ventas mes: group orders by payment_group (2 payments = 1 sale)
+    ventas_mes_grouped = conn.execute(
+        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE fecha_pedido LIKE ? AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude}",
         (f"{current_month}%",)
     ).fetchone()["c"]
+    ventas_mes_ungrouped = conn.execute(
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND (payment_group IS NULL OR payment_group = '') {gift_exclude}",
+        (f"{current_month}%",)
+    ).fetchone()["c"]
+    ventas_mes = ventas_mes_grouped + ventas_mes_ungrouped
+
     facturacion_mes = conn.execute(
         f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {gift_exclude}",
         (f"{current_month}%",)
     ).fetchone()["s"]
-    ventas_ano = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? {gift_exclude}",
+
+    # Ventas año: group orders by payment_group
+    ventas_ano_grouped = conn.execute(
+        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE fecha_pedido LIKE ? AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude}",
         (f"{current_year}%",)
     ).fetchone()["c"]
+    ventas_ano_ungrouped = conn.execute(
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND (payment_group IS NULL OR payment_group = '') {gift_exclude}",
+        (f"{current_year}%",)
+    ).fetchone()["c"]
+    ventas_ano = ventas_ano_grouped + ventas_ano_ungrouped
+
     facturacion_ano = conn.execute(
         f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {gift_exclude}",
         (f"{current_year}%",)
@@ -529,10 +544,16 @@ def get_dashboard_stats():
     q_date_start = f"{current_year}-{q_start_month:02d}-01"
     q_date_end = f"{q_end_year}-{q_end_next:02d}-01"
 
-    ventas_trimestre = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {gift_exclude}",
+    # Ventas trimestre: group orders by payment_group
+    ventas_trim_grouped = conn.execute(
+        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude}",
         (q_date_start, q_date_end)
     ).fetchone()["c"]
+    ventas_trim_ungrouped = conn.execute(
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? AND (payment_group IS NULL OR payment_group = '') {gift_exclude}",
+        (q_date_start, q_date_end)
+    ).fetchone()["c"]
+    ventas_trimestre = ventas_trim_grouped + ventas_trim_ungrouped
     facturacion_trimestre = conn.execute(
         f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {gift_exclude}",
         (q_date_start, q_date_end)
