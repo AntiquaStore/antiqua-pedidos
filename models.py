@@ -464,6 +464,30 @@ def get_dashboard_stats():
     ).fetchone()["s"]
     mes_nombre = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"][now.month - 1]
 
+    # Trimestre en curso
+    q = (now.month - 1) // 3  # 0=Q1, 1=Q2, 2=Q3, 3=Q4
+    q_start_month = q * 3 + 1
+    q_end_month = q_start_month + 2
+    q_meses = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
+    trimestre_nombre = f"Q{q+1} ({q_meses[q_start_month-1][:3]}-{q_meses[q_end_month-1][:3]})"
+    q_start = f"{current_year}-{q_start_month:02d}"
+    q_end_next = q_end_month + 1
+    q_end_year = current_year
+    if q_end_next > 12:
+        q_end_next = 1
+        q_end_year = str(int(current_year) + 1)
+    q_date_start = f"{current_year}-{q_start_month:02d}-01"
+    q_date_end = f"{q_end_year}-{q_end_next:02d}-01"
+
+    ventas_trimestre = conn.execute(
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {excluir_regalo}",
+        (q_date_start, q_date_end)
+    ).fetchone()["c"]
+    facturacion_trimestre = conn.execute(
+        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {excluir_regalo}",
+        (q_date_start, q_date_end)
+    ).fetchone()["s"]
+
     conn.close()
     return {
         "total": total,
@@ -479,6 +503,9 @@ def get_dashboard_stats():
         "avg_ticket_joyas_iva": avg_ticket_joyas_iva,
         "ventas_mes": ventas_mes,
         "facturacion_mes": facturacion_mes,
+        "ventas_trimestre": ventas_trimestre,
+        "facturacion_trimestre": facturacion_trimestre,
+        "trimestre_nombre": trimestre_nombre,
         "ventas_ano": ventas_ano,
         "facturacion_ano": facturacion_ano,
         "mes_nombre": mes_nombre,

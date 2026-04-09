@@ -55,61 +55,77 @@
     </div>
 </div>
 
-<!-- MES EN CURSO -->
-<h2 class="text-lg text-dark mb-3" style="font-family: 'Libre Baskerville', serif;">{{ stats.mes_nombre or 'Este mes' }} 2026</h2>
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-    <div class="bg-white border border-line p-5">
-        <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.ventas_mes or 0 }}</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Ventas del mes</p>
+<!-- KPIs: Mes + Trimestre + Año en una sola vista compacta -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+    <!-- MES -->
+    <div class="bg-white border border-line p-4">
+        <h3 class="text-xs uppercase tracking-widest text-secondary font-semibold mb-3">{{ stats.mes_nombre or 'Mes' }} 2026</h3>
+        <div class="flex justify-between items-end">
+            <div>
+                <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.ventas_mes or 0 }}</p>
+                <p class="text-[11px] text-secondary">ventas</p>
+            </div>
+            <div class="text-right">
+                <p class="text-lg font-bold text-dark">{{ "{:,.0f}".format(stats.facturacion_mes or 0)|replace(",", ".") }}&euro;</p>
+                <p class="text-[11px] text-secondary">sin IVA</p>
+            </div>
+        </div>
     </div>
-    <div class="bg-white border border-line p-5">
-        <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.facturacion_mes or 0)|replace(",", ".") }} &euro;</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Facturaci&oacute;n mes (sin IVA)</p>
+    <!-- TRIMESTRE -->
+    <div class="bg-white border border-line p-4">
+        <h3 class="text-xs uppercase tracking-widest text-secondary font-semibold mb-3">{{ stats.trimestre_nombre or 'Trimestre' }}</h3>
+        <div class="flex justify-between items-end">
+            <div>
+                <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.ventas_trimestre or 0 }}</p>
+                <p class="text-[11px] text-secondary">ventas</p>
+            </div>
+            <div class="text-right">
+                <p class="text-lg font-bold text-dark">{{ "{:,.0f}".format(stats.facturacion_trimestre or 0)|replace(",", ".") }}&euro;</p>
+                <p class="text-[11px] text-secondary">sin IVA</p>
+            </div>
+        </div>
     </div>
-    <div class="bg-white border border-line p-5">
-        <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.pending or 0 }}</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Pendientes (no entregados)</p>
-    </div>
-    <div class="bg-white border border-line p-5">
-        <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.in_workshop or 0 }}</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">En taller (notificados)</p>
+    <!-- AÑO -->
+    <div class="bg-white border border-line p-4">
+        <h3 class="text-xs uppercase tracking-widest text-secondary font-semibold mb-3">Acumulado 2026</h3>
+        <div class="flex justify-between items-end">
+            <div>
+                <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.ventas_ano or 0 }}</p>
+                <p class="text-[11px] text-secondary">ventas</p>
+            </div>
+            <div class="text-right">
+                <p class="text-lg font-bold text-dark">{{ "{:,.0f}".format(stats.facturacion_ano or 0)|replace(",", ".") }}&euro;</p>
+                <p class="text-[11px] text-secondary">sin IVA</p>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- AÑO 2026 -->
-<h2 class="text-lg text-dark mb-3" style="font-family: 'Libre Baskerville', serif;">Acumulado 2026</h2>
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-    <div class="bg-white border border-line p-5">
-        <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.ventas_ano or 0 }}</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Ventas totales</p>
+<!-- Fila 2: Tickets + Estado taller + Desglose -->
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+    <div class="bg-white border border-line p-3">
+        <p class="text-xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.avg_ticket_joyas or 0)|replace(",", ".") }}&euro;</p>
+        <p class="text-[11px] text-secondary">TM sin IVA</p>
     </div>
-    <div class="bg-white border border-line p-5">
-        <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.facturacion_ano or 0)|replace(",", ".") }} &euro;</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Facturaci&oacute;n total (sin IVA)</p>
+    <div class="bg-white border border-line p-3">
+        <p class="text-xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.avg_ticket_joyas_iva or 0)|replace(",", ".") }}&euro;</p>
+        <p class="text-[11px] text-secondary">TM con IVA</p>
     </div>
-    <div class="bg-white border border-line p-5">
-        <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.avg_ticket_joyas or 0)|replace(",", ".") }} &euro;</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Ticket medio sin IVA</p>
+    <div class="bg-white border border-line p-3">
+        <p class="text-xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.pending or 0 }}</p>
+        <p class="text-[11px] text-secondary">Pendientes</p>
     </div>
-    <div class="bg-white border border-line p-5">
-        <p class="text-3xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ "{:,.0f}".format(stats.avg_ticket_joyas_iva or 0)|replace(",", ".") }} &euro;</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Ticket medio con IVA</p>
+    <div class="bg-white border border-line p-3">
+        <p class="text-xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.joyas_count or 0 }}</p>
+        <p class="text-[11px] text-secondary">Joyas</p>
     </div>
-</div>
-
-<!-- DESGLOSE POR TIPO -->
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-    <div class="bg-white border border-line p-5">
-        <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.joyas_count or 0 }}</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Joyas vendidas</p>
+    <div class="bg-white border border-line p-3">
+        <p class="text-xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.cadenas_count or 0 }}</p>
+        <p class="text-[11px] text-secondary">Cadenas</p>
     </div>
-    <div class="bg-white border border-line p-5">
-        <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.cadenas_count or 0 }}</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Cadenas vendidas</p>
-    </div>
-    <div class="bg-white border border-line p-5">
-        <p class="text-2xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.joyeros_count or 0 }}</p>
-        <p class="text-sm text-secondary mt-1 tracking-wide">Joyeros vendidos</p>
+    <div class="bg-white border border-line p-3">
+        <p class="text-xl font-bold text-dark" style="font-family: 'Libre Baskerville', serif;">{{ stats.joyeros_count or 0 }}</p>
+        <p class="text-[11px] text-secondary">Joyeros</p>
     </div>
 </div>
 
