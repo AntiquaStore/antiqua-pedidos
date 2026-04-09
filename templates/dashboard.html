@@ -242,7 +242,7 @@
                         <td class="px-5 py-4 text-sm text-dark">{{ order.customer_name or '-' }}</td>
                         <td class="px-5 py-4 text-sm text-secondary">{{ order.fecha_pedido[:10] if order.fecha_pedido else '-' }}</td>
                         <td class="px-5 py-4 text-sm text-dark text-right tabular-nums">{{ "{:,.0f}".format(order.pvp or 0)|replace(",", ".") }} €</td>
-                        <td class="px-5 py-4 text-center" x-data="statusChanger('{{ order.id }}', '{{ order.status }}')">
+                        <td class="px-5 py-4 text-center" x-data="statusChanger('{{ order.id }}', '{{ order.status }}', '{{ order.ring_size or '' }}')">
                             <select @change="changeStatus($event.target.value)"
                                     :disabled="saving"
                                     class="text-[11px] uppercase tracking-wide font-semibold text-white pl-2 pr-6 py-1.5 border-0 cursor-pointer {{ status_colors.get(order.status, 'bg-secondary') }}"
@@ -326,24 +326,53 @@
         'completado': 'bg-dark',
     };
 
-    function statusChanger(orderId, currentStatus) {
+    function statusChanger(orderId, currentStatus, currentSize) {
         return {
             saving: false,
             async changeStatus(newStatus) {
                 if (newStatus === currentStatus) return;
+
+                let extraData = {};
+
+                // Cambio de talla: pedir nueva talla y notificar a Barto
+                if (newStatus === 'cambio_talla') {
+                    const nuevaTalla = prompt('Nueva talla para este pedido:');
+                    if (!nuevaTalla) {
+                        // Revert select
+                        this.$el.querySelector('select').value = currentStatus;
+                        return;
+                    }
+                    extraData.nueva_talla = nuevaTalla;
+                    extraData.talla_original = currentSize || '';
+                }
+
+                // Reparación: pedir descripción y notificar a Barto
+                if (newStatus === 'reparacion') {
+                    const desc = prompt('Describe el arreglo necesario:');
+                    if (!desc) {
+                        this.$el.querySelector('select').value = currentStatus;
+                        return;
+                    }
+                    extraData.arreglo_descripcion = desc;
+                }
+
                 this.saving = true;
                 try {
                     const res = await fetch(`/api/orders/${orderId}/status`, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ status: newStatus })
+                        body: JSON.stringify({ status: newStatus, ...extraData })
                     });
                     if (res.ok) {
-                        // Update select background color
                         const sel = this.$el.querySelector('select');
                         Object.values(statusBgMap).forEach(c => sel.classList.remove(c));
                         sel.classList.add(statusBgMap[newStatus] || 'bg-secondary');
                         currentStatus = newStatus;
+                        // Show WhatsApp link if returned
+                        const data = await res.json();
+                        if (data.whatsapp_link) {
+                            window.open(data.whatsapp_link, '_blank');
+                        }
                     }
                 } catch (e) {
                     console.error('Status change failed:', e);

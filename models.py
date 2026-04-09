@@ -404,55 +404,76 @@ def set_setting(key: str, value: str):
     conn.close()
 
 
+# ── Gift joyero detection ──
+def get_gift_joyero_ids(conn) -> set:
+    """Return set of order IDs that are gift joyeros (Relique Box included free with a joya in the same order).
+    A joyero is a gift when its shopify_order_number has at least one other item that is NOT a joyero."""
+    all_orders = conn.execute("SELECT id, shopify_order_number, product_type FROM orders").fetchall()
+    # Group by order number
+    by_num = {}
+    for o in all_orders:
+        num = (o["shopify_order_number"] or "").strip()
+        if num:
+            by_num.setdefault(num, []).append(o)
+    # Find joyero IDs that share an order number with a non-joyero
+    gift_ids = set()
+    for num, items in by_num.items():
+        types = {(dict(i).get("product_type") or "joya") for i in items}
+        if "joyero" in types and len(types) > 1:
+            for i in items:
+                if (dict(i).get("product_type") or "joya") == "joyero":
+                    gift_ids.add(i["id"])
+    return gift_ids
+
+
 # ── Stats ──
 def get_dashboard_stats():
     conn = get_db()
+
+    # Get gift joyero IDs to exclude from ALL revenue/count calculations
+    gift_ids = get_gift_joyero_ids(conn)
+    if gift_ids:
+        gift_exclude = f"AND id NOT IN ({','.join(str(i) for i in gift_ids)})"
+    else:
+        gift_exclude = ""
+
     total = conn.execute("SELECT COUNT(*) as c FROM orders").fetchone()["c"]
     pending = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status NOT IN ('enviado','archivado','entregado','completado')").fetchone()["c"]
     in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status IN ('en_taller','notificado')").fetchone()["c"]
-    revenue = conn.execute("SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders").fetchone()["s"]
+    revenue = conn.execute(f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE 1=1 {gift_exclude}").fetchone()["s"]
 
-    # Joyas vs Joyeros vs Cadenas counts (partial payments grouped = 1 joya)
+    # Joyas count (excluding gift joyeros)
     joyas_grouped = conn.execute(
-        "SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND payment_group IS NOT NULL AND payment_group != ''"
+        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude}"
     ).fetchone()["c"]
     joyas_ungrouped = conn.execute(
-        "SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND (payment_group IS NULL OR payment_group = '')"
+        f"SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND (payment_group IS NULL OR payment_group = '') {gift_exclude}"
     ).fetchone()["c"]
     joyas_count = joyas_grouped + joyas_ungrouped
-    # Joyeros vendidos: solo los que se compraron solos (no como regalo con joyas >= 2500)
-    # Un Relique Box es regalo si su shopify_order_id tiene otros items que no son joyero
-    joyeros_count = conn.execute("""
-        SELECT COUNT(*) as c FROM orders o1
-        WHERE o1.product_type = 'joyero'
-        AND NOT EXISTS (
-            SELECT 1 FROM orders o2
-            WHERE o2.shopify_order_id = o1.shopify_order_id
-            AND o2.product_type != 'joyero'
-        )
-    """).fetchone()["c"]
+
+    # Joyeros vendidos: only those NOT in gift_ids (= purchased independently)
+    joyeros_count = conn.execute(
+        f"SELECT COUNT(*) as c FROM orders WHERE product_type = 'joyero' {gift_exclude}"
+    ).fetchone()["c"]
     cadenas_count = conn.execute(
         "SELECT COUNT(*) as c FROM orders WHERE product_type = 'cadena'"
     ).fetchone()["c"]
 
-    # Unique tickets & avg ticket (joyas only, merging split payments)
-    # Orders with payment_group: group them (sum pvp, count as 1 ticket)
-    # Orders without payment_group: each is 1 ticket
-    # Exclude joyeros from ticket calculations
-    grouped_tickets = conn.execute("""
+    # Tickets (excluding gift joyeros)
+    grouped_tickets = conn.execute(f"""
         SELECT SUM(pvp / 1.21) as ticket_pvp
         FROM orders
         WHERE payment_group IS NOT NULL AND payment_group != ''
-          AND COALESCE(product_type,'joya') = 'joya'
+          AND COALESCE(product_type,'joya') = 'joya' {gift_exclude}
         GROUP BY payment_group
     """).fetchall()
 
-    ungrouped_tickets = conn.execute("""
+    ungrouped_tickets = conn.execute(f"""
         SELECT pvp as ticket_pvp
         FROM orders
         WHERE (payment_group IS NULL OR payment_group = '')
           AND COALESCE(product_type,'joya') = 'joya'
-          AND pvp > 0
+          AND pvp > 0 {gift_exclude}
     """).fetchall()
 
     all_tickets = [row["ticket_pvp"] for row in grouped_tickets if row["ticket_pvp"]] + \
@@ -462,37 +483,31 @@ def get_dashboard_stats():
     total_joyas_revenue = sum(all_tickets) if all_tickets else 0
     avg_ticket_joyas = total_joyas_revenue / unique_tickets if unique_tickets > 0 else 0
 
-    # Legacy avg_ticket (simple average of all orders with pvp > 0)
     avg_ticket = conn.execute(
-        "SELECT COALESCE(AVG(pvp),0) as a FROM orders WHERE pvp > 0"
+        f"SELECT COALESCE(AVG(pvp),0) as a FROM orders WHERE pvp > 0 {gift_exclude}"
     ).fetchone()["a"]
 
-    # Ticket medio con IVA (joyas only, same logic as avg_ticket_joyas but with IVA)
     avg_ticket_joyas_iva = avg_ticket_joyas * 1.21 if avg_ticket_joyas else 0
 
-    # Ventas del mes actual y del año
     import datetime as _dt
     now = _dt.date.today()
     current_month = now.strftime("%Y-%m")
     current_year = now.strftime("%Y")
-    # Excluir joyeros regalo (los que vienen con otros items en el mismo pedido)
-    excluir_regalo = """AND NOT (product_type = 'joyero' AND EXISTS (
-        SELECT 1 FROM orders o2 WHERE o2.shopify_order_id = orders.shopify_order_id AND o2.product_type != 'joyero'
-    ))"""
+
     ventas_mes = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? {excluir_regalo}",
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? {gift_exclude}",
         (f"{current_month}%",)
     ).fetchone()["c"]
     facturacion_mes = conn.execute(
-        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {excluir_regalo}",
+        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {gift_exclude}",
         (f"{current_month}%",)
     ).fetchone()["s"]
     ventas_ano = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? {excluir_regalo}",
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? {gift_exclude}",
         (f"{current_year}%",)
     ).fetchone()["c"]
     facturacion_ano = conn.execute(
-        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {excluir_regalo}",
+        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {gift_exclude}",
         (f"{current_year}%",)
     ).fetchone()["s"]
     mes_nombre = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"][now.month - 1]
@@ -818,9 +833,11 @@ def get_accounting_stats(month=None, from_month=None, to_month=None):
     total_gastos = gastos_taller + gastos_fijos + gastos_nominas + gastos_publicidad + gastos_impuestos + gastos_comisiones
     resultado = total_ingresos - total_gastos
 
-    # Shopify orders total (from orders table, not bank)
+    # Shopify orders total (from orders table, not bank) — excluding gift joyeros
+    gift_ids = get_gift_joyero_ids(conn)
+    gift_exclude_acc = f"AND id NOT IN ({','.join(str(i) for i in gift_ids)})" if gift_ids else ""
     ventas_shopify = conn.execute(
-        "SELECT COALESCE(SUM(pvp), 0) as s FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ?",
+        f"SELECT COALESCE(SUM(pvp), 0) as s FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {gift_exclude_acc}",
         (date_start, date_end)
     ).fetchone()["s"]
 

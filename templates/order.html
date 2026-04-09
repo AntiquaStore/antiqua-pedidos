@@ -361,7 +361,7 @@
     cambio_pending: {{ 'true' if order.cambio_talla_solicitado == '1' and order.cambio_talla_completado != '1' else 'false' }},
     cambio_done: {{ 'true' if order.cambio_talla_completado == '1' else 'false' }},
     /* Arreglo */
-    arreglo_desc: '{{ (order.arreglo_descripcion or '')|replace(chr(39), chr(92)+chr(39))|replace(chr(10), ' ') }}',
+    arreglo_desc: `{{ (order.arreglo_descripcion or "") }}`,
     arreglo_pending: {{ 'true' if order.arreglo_solicitado == '1' and order.arreglo_completado != '1' else 'false' }},
     arreglo_done: {{ 'true' if order.arreglo_completado == '1' else 'false' }},
     saving: false,

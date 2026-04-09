@@ -127,38 +127,20 @@ def on_startup():
     except Exception as e:
         print(f"Auto-import failed: {e}")
 
-    # ALWAYS fix statuses after sync (Render free tier wipes DB on redeploy)
+    # Fix product_type for orders missing it (ensures merge works correctly)
     try:
-        import datetime as _dt
+        from shopify_client import classify_product_type
         conn = get_db()
-        now = _dt.datetime.now().isoformat()
-        orders = conn.execute("SELECT id, shopify_order_number, product_type, joya_terminada FROM orders").fetchall()
-        fixed = 0
+        orders = conn.execute("SELECT id, product_name FROM orders WHERE product_type IS NULL OR product_type=''").fetchall()
         for o in orders:
-            num_str = (o["shopify_order_number"] or "").replace("#", "").strip()
-            try:
-                num = int(num_str)
-            except ValueError:
-                continue
-
-            if (o["product_type"] or "") == "joyero":
-                new_status = "archivado"
-            elif o["joya_terminada"] == "1":
-                new_status = "recibido"
-            elif num < 1900:
-                new_status = "archivado"
-            elif 1900 <= num <= 1908:
-                new_status = "en_taller"
-            else:
-                new_status = "nuevo"
-
-            conn.execute("UPDATE orders SET status=?, updated_at=? WHERE id=?", (new_status, now, o["id"]))
-            fixed += 1
-        conn.commit()
+            pt = classify_product_type(o["product_name"] or "")
+            conn.execute("UPDATE orders SET product_type=? WHERE id=?", (pt, o["id"]))
+        if orders:
+            conn.commit()
+            print(f"Fixed product_type for {len(orders)} orders")
         conn.close()
-        print(f"Auto-fixed {fixed} order statuses on startup")
     except Exception as e:
-        print(f"Status fix failed: {e}")
+        print(f"Product type fix failed: {e}")
 
 # ---------------------------------------------------------------------------
 # HTML Pages
@@ -597,10 +579,49 @@ async def change_status(order_id: str, request: Request):
             'enviado': 'Enviado/Recogido', 'archivado': 'Archivado',
             'cambio_talla': 'Cambio de talla', 'reparacion': 'En reparación',
         }
+        # Cambio de talla: save details + notify Barto
+        whatsapp_link = None
+        if new_status == "cambio_talla":
+            nueva_talla = data.get("nueva_talla", "")
+            talla_original = data.get("talla_original", "")
+            update_data["cambio_talla_solicitado"] = "1"
+            update_data["cambio_talla_solicitado_at"] = datetime.now().isoformat()
+            update_data["cambio_talla_completado"] = "0"
+            if nueva_talla:
+                update_data["ring_size"] = nueva_talla
+            order = get_order(order_id)
+            if order:
+                from notifications import whatsapp_cambio_talla, generate_whatsapp_link, SUPPLIERS
+                import urllib.parse
+                msg = whatsapp_cambio_talla(order, talla_original, nueva_talla)
+                phone = SUPPLIERS["barto"]["phone"]
+                whatsapp_link = f"https://wa.me/{phone}?text={urllib.parse.quote(msg)}"
+                log_activity(order_id, "Cambio de talla solicitado",
+                             f"Talla original: {talla_original} → Nueva: {nueva_talla}")
+
+        # Reparación: save details + notify Barto
+        if new_status == "reparacion":
+            arreglo_desc = data.get("arreglo_descripcion", "")
+            update_data["arreglo_solicitado"] = "1"
+            update_data["arreglo_solicitado_at"] = datetime.now().isoformat()
+            update_data["arreglo_completado"] = "0"
+            update_data["arreglo_descripcion"] = arreglo_desc
+            order = get_order(order_id)
+            if order:
+                from notifications import whatsapp_arreglo, SUPPLIERS
+                import urllib.parse
+                msg = whatsapp_arreglo(order, arreglo_desc)
+                phone = SUPPLIERS["barto"]["phone"]
+                whatsapp_link = f"https://wa.me/{phone}?text={urllib.parse.quote(msg)}"
+                log_activity(order_id, "Arreglo solicitado", arreglo_desc)
+
         update_order(order_id, update_data)
         log_activity(order_id, f"Estado cambiado a {STATUS_LABELS.get(new_status, new_status)}")
 
-        return JSONResponse({"ok": True, "gold_price_captured": update_data.get("precio_oro_real")})
+        result = {"ok": True, "gold_price_captured": update_data.get("precio_oro_real")}
+        if whatsapp_link:
+            result["whatsapp_link"] = whatsapp_link
+        return JSONResponse(result)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
