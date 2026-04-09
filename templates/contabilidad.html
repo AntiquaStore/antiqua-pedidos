@@ -130,15 +130,15 @@
     {% endif %}
     {% endif %}
 
-    <!-- CONCILIACION SHOPIFY vs BANCO -->
-    <h2 class="text-lg text-dark mb-3" style="font-family: 'Libre Baskerville', serif;">Conciliaci&oacute;n Shopify vs Banco</h2>
+    <!-- CONCILIACION PEDIDOS vs BANCO -->
+    <h2 class="text-lg text-dark mb-3" style="font-family: 'Libre Baskerville', serif;">Conciliaci&oacute;n Pedidos vs Banco</h2>
     <div class="bg-white border border-line mb-8 overflow-hidden">
         <table class="w-full">
             <tbody>
                 <tr class="border-b border-line">
                     <td class="px-5 py-3">
-                        <p class="text-sm text-dark font-medium">Ventas registradas en Shopify</p>
-                        <p class="text-[11px] text-secondary mt-0.5">Suma de PVP con IVA incluido, antes de comisiones Shopify. Es lo que pagan los clientes, no lo que llega al banco.</p>
+                        <p class="text-sm text-dark font-medium">Total pedidos registrados (Shopify + manuales)</p>
+                        <p class="text-[11px] text-secondary mt-0.5">Suma de PVP con IVA incluido. Es lo que pagan los clientes.</p>
                     </td>
                     <td class="px-5 py-3 text-sm text-dark text-right tabular-nums font-semibold">{{ "{:,.2f}".format(stats.ventas_shopify or 0)|replace(",", "X")|replace(".", ",")|replace("X", ".") }} &euro;</td>
                 </tr>

@@ -146,7 +146,7 @@ def on_startup():
 # HTML Pages
 # ---------------------------------------------------------------------------
 @app.get("/", dependencies=[Depends(require_auth)])
-def dashboard(request: Request, status: str = None, month: str = None, search: str = None):
+def dashboard(request: Request, status: str = None, month: str = None, search: str = None, page: int = 1):
     try:
         filters = {}
         if status:
@@ -156,10 +156,17 @@ def dashboard(request: Request, status: str = None, month: str = None, search: s
         if search:
             filters["search"] = search
 
-        orders = get_all_orders(**filters)
+        all_orders = get_all_orders(**filters)
         stats = get_dashboard_stats()
-
         gold_price_info = get_gold_info()
+
+        # Pagination: 100 per page
+        per_page = 100
+        total_orders = len(all_orders)
+        total_pages = max(1, (total_orders + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+        start = (page - 1) * per_page
+        orders = all_orders[start:start + per_page]
 
         return templates.TemplateResponse(name="dashboard.html", request=request, context={
             "orders": orders,
@@ -168,6 +175,9 @@ def dashboard(request: Request, status: str = None, month: str = None, search: s
             "current_status": status or "",
             "current_month": month or "",
             "current_search": search or "",
+            "page": page,
+            "total_pages": total_pages,
+            "total_orders": total_orders,
         })
     except Exception as e:
         return templates.TemplateResponse(name="dashboard.html", request=request, context={
