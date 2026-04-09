@@ -5,16 +5,38 @@
 {# ── Status helpers ── #}
 {% set status_labels = {
     'nuevo': 'Nuevo',
+    'en_taller': 'En taller',
+    'recibido': 'Recibido de taller',
+    'enviado': 'Enviado/Recogido',
+    'archivado': 'Archivado',
+    'cambio_talla': 'Cambio de talla',
+    'reparacion': 'En reparación',
     'notificado': 'En taller',
-    'entregado': 'Recibido',
-    'completado': 'Enviado'
+    'entregado': 'Recibido de taller',
+    'completado': 'Enviado/Recogido'
 } %}
 {% set status_colors = {
     'nuevo': 'bg-[#5a7b9a]',
+    'en_taller': 'bg-taupe',
+    'recibido': 'bg-[#4a7c59]',
+    'enviado': 'bg-dark',
+    'archivado': 'bg-secondary',
+    'cambio_talla': 'bg-amber-600',
+    'reparacion': 'bg-[#9a5a5a]',
     'notificado': 'bg-taupe',
     'entregado': 'bg-[#4a7c59]',
     'completado': 'bg-dark'
 } %}
+{# Ordered list for the dropdown #}
+{% set status_options = [
+    ('nuevo', 'Nuevo'),
+    ('en_taller', 'En taller'),
+    ('recibido', 'Recibido de taller'),
+    ('enviado', 'Enviado/Recogido'),
+    ('archivado', 'Archivado'),
+    ('cambio_talla', 'Cambio de talla'),
+    ('reparacion', 'En reparación'),
+] %}
 
 <!-- Header -->
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
@@ -136,11 +158,9 @@
         <select name="status" class="border border-line px-3 py-2 text-sm text-dark bg-white focus:outline-none focus:border-taupe"
                 style="border-radius: 0;">
             <option value="">Todos los estados</option>
-            <option value="nuevo" {{ 'selected' if current_status == 'nuevo' }}>Nuevo</option>
-            <option value="notificado" {{ 'selected' if current_status == 'notificado' }}>Notificado</option>
-            <option value="notificado" {{ 'selected' if current_status == 'notificado' }}>En taller</option>
-            <option value="entregado" {{ 'selected' if current_status == 'entregado' }}>Entregado</option>
-            <option value="completado" {{ 'selected' if current_status == 'completado' }}>Completado</option>
+            {% for val, label in status_options %}
+            <option value="{{ val }}" {{ 'selected' if current_status == val }}>{{ label }}</option>
+            {% endfor %}
         </select>
 
         <!-- Month -->
@@ -207,8 +227,14 @@
                                 {% elif order.is_partial_payment == '1' or order.is_partial_payment == 1 %}
                                 <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-amber-100 text-amber-700 border border-amber-200">Pago parcial</span>
                                 {% endif %}
-                                {% if (order.pvp or 0) >= 2500 and (order.product_type or 'joya') != 'joyero' %}
+                                {% if order._incluir_joyero is defined and order._incluir_joyero %}
                                 <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-taupe/10 text-taupe border border-taupe/30">Incluir joyero</span>
+                                {% endif %}
+                                {% if order.es_recogida == '1' %}
+                                <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-blue-50 text-blue-700 border border-blue-200">Recogida tienda</span>
+                                {% endif %}
+                                {% if order.urgente == '1' %}
+                                <span class="ml-1.5 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-semibold bg-red-100 text-red-700 border border-red-200">Urgente</span>
                                 {% endif %}
                             </div>
                         </td>
@@ -216,11 +242,16 @@
                         <td class="px-5 py-4 text-sm text-dark">{{ order.customer_name or '-' }}</td>
                         <td class="px-5 py-4 text-sm text-secondary">{{ order.fecha_pedido[:10] if order.fecha_pedido else '-' }}</td>
                         <td class="px-5 py-4 text-sm text-dark text-right tabular-nums">{{ "{:,.0f}".format(order.pvp or 0)|replace(",", ".") }} €</td>
-                        <td class="px-5 py-4 text-center">
-                            <span class="inline-block px-3 py-1 text-xs uppercase tracking-wide font-semibold text-white {{ status_colors.get(order.status, 'bg-secondary') }}">
-                                {{ status_labels.get(order.status, order.status or '-') }}
-                            </span>
-                            {% if order.status == 'notificado' and order.fase_produccion and order.fase_produccion != 'pendiente' %}
+                        <td class="px-5 py-4 text-center" x-data="statusChanger('{{ order.id }}', '{{ order.status }}')">
+                            <select @change="changeStatus($event.target.value)"
+                                    :disabled="saving"
+                                    class="text-[11px] uppercase tracking-wide font-semibold text-white pl-2 pr-6 py-1.5 border-0 cursor-pointer {{ status_colors.get(order.status, 'bg-secondary') }}"
+                                    style="min-width: 140px; border-radius: 0;">
+                                {% for val, label in status_options %}
+                                <option value="{{ val }}" {{ 'selected' if order.status == val }} style="background: white; color: #212121; text-transform: none;">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if order.status in ('en_taller', 'notificado') and order.fase_produccion and order.fase_produccion != 'pendiente' %}
                             {% set fase_labels_d = {'prototipado':'Prototipado', 'fundido':'Fundido', 'repaso':'Repaso', 'engaste':'Engaste', 'repaso_final':'Repaso final', 'terminado':'Terminado'} %}
                             <span class="block mt-1 text-[10px] font-medium text-bronze">{{ fase_labels_d.get(order.fase_produccion, order.fase_produccion) }}</span>
                             {% endif %}
@@ -282,6 +313,46 @@
 
 {% block scripts %}
 <script>
+    const statusBgMap = {
+        'nuevo': 'bg-[#5a7b9a]',
+        'en_taller': 'bg-taupe',
+        'recibido': 'bg-[#4a7c59]',
+        'enviado': 'bg-dark',
+        'archivado': 'bg-secondary',
+        'cambio_talla': 'bg-amber-600',
+        'reparacion': 'bg-[#9a5a5a]',
+        'notificado': 'bg-taupe',
+        'entregado': 'bg-[#4a7c59]',
+        'completado': 'bg-dark',
+    };
+
+    function statusChanger(orderId, currentStatus) {
+        return {
+            saving: false,
+            async changeStatus(newStatus) {
+                if (newStatus === currentStatus) return;
+                this.saving = true;
+                try {
+                    const res = await fetch(`/api/orders/${orderId}/status`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ status: newStatus })
+                    });
+                    if (res.ok) {
+                        // Update select background color
+                        const sel = this.$el.querySelector('select');
+                        Object.values(statusBgMap).forEach(c => sel.classList.remove(c));
+                        sel.classList.add(statusBgMap[newStatus] || 'bg-secondary');
+                        currentStatus = newStatus;
+                    }
+                } catch (e) {
+                    console.error('Status change failed:', e);
+                }
+                this.saving = false;
+            }
+        };
+    }
+
     function syncHandler() {
         return {
             syncing: false,

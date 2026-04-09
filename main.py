@@ -142,13 +142,13 @@ def on_startup():
                 continue
 
             if (o["product_type"] or "") == "joyero":
-                new_status = "entregado"
+                new_status = "archivado"
             elif o["joya_terminada"] == "1":
-                new_status = "entregado"
+                new_status = "recibido"
             elif num < 1900:
-                new_status = "entregado"
+                new_status = "archivado"
             elif 1900 <= num <= 1908:
-                new_status = "notificado"
+                new_status = "en_taller"
             else:
                 new_status = "nuevo"
 
@@ -568,15 +568,19 @@ def notify_supplier_endpoint(order_id: str, supplier: str):
 @app.post("/api/orders/{order_id}/status")
 async def change_status(order_id: str, request: Request):
     try:
+        VALID_STATUSES = {'nuevo', 'en_taller', 'recibido', 'enviado', 'archivado', 'cambio_talla', 'reparacion',
+                          'notificado', 'entregado', 'completado'}  # legacy compat
         data = await request.json()
         new_status = data.get("status")
         if not new_status:
             return JSONResponse({"ok": False, "error": "Falta el campo status"}, status_code=400)
+        if new_status not in VALID_STATUSES:
+            return JSONResponse({"ok": False, "error": f"Estado no válido: {new_status}"}, status_code=400)
 
         update_data = {"status": new_status}
 
-        # When marking as "entregado", auto-capture today's real gold price
-        if new_status == "entregado":
+        # When marking as "recibido" (or legacy "entregado"), auto-capture today's real gold price
+        if new_status in ("recibido", "entregado"):
             real_gold = get_current_gold_price()
             order = get_order(order_id)
             if order:
@@ -585,11 +589,16 @@ async def change_status(order_id: str, request: Request):
                 update_data["precio_oro_real"] = round(real_gold, 2)
                 update_data["peso_real"] = peso_est  # pre-fill with estimate
                 update_data["oro_total_real"] = round(oro_real, 2)
-                log_activity(order_id, "Precio oro capturado al entregar",
+                log_activity(order_id, "Precio oro capturado al recibir de taller",
                              f"Oro 24K: {real_gold:.2f} EUR/gr x {peso_est:.1f}gr = {oro_real:.2f} EUR")
 
+        STATUS_LABELS = {
+            'nuevo': 'Nuevo', 'en_taller': 'En taller', 'recibido': 'Recibido de taller',
+            'enviado': 'Enviado/Recogido', 'archivado': 'Archivado',
+            'cambio_talla': 'Cambio de talla', 'reparacion': 'En reparación',
+        }
         update_order(order_id, update_data)
-        log_activity(order_id, f"Estado cambiado a {new_status}")
+        log_activity(order_id, f"Estado cambiado a {STATUS_LABELS.get(new_status, new_status)}")
 
         return JSONResponse({"ok": True, "gold_price_captured": update_data.get("precio_oro_real")})
     except Exception as e:
@@ -736,11 +745,11 @@ def fix_all_status():
             continue
 
         if (o["product_type"] or "") == "joyero":
-            new_status = "entregado"
+            new_status = "archivado"
         elif o["joya_terminada"] == "1":
-            new_status = "entregado"
+            new_status = "recibido"
         elif num < 1900:
-            new_status = "entregado"
+            new_status = "archivado"
         else:
             new_status = "nuevo"
 
@@ -749,7 +758,7 @@ def fix_all_status():
     conn.commit()
 
     stats = {}
-    for s in ['nuevo', 'notificado', 'entregado', 'completado']:
+    for s in ['nuevo', 'en_taller', 'recibido', 'enviado', 'archivado', 'cambio_talla', 'reparacion']:
         stats[s] = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status=?", (s,)).fetchone()["c"]
 
     conn.close()

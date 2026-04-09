@@ -140,7 +140,7 @@ def fetch_orders_api(since_id=None, limit=250, year=2026):
         "created_at_min": f"{year}-01-01T00:00:00Z",
         "fields": "id,name,email,created_at,financial_status,fulfillment_status,"
                   "total_price,subtotal_price,total_tax,line_items,billing_address,"
-                  "shipping_address,note,tags,payment_gateway_names",
+                  "shipping_address,shipping_lines,note,tags,payment_gateway_names",
     }
     if since_id:
         params["since_id"] = since_id
@@ -200,6 +200,11 @@ def sync_from_api(full=False):
             shipping = order.get("shipping_address") or {}
             addr = shipping or billing
 
+            # Detect pickup vs shipping
+            shipping_lines = order.get("shipping_lines", [])
+            shipping_method = shipping_lines[0].get("title", "") if shipping_lines else ""
+            es_recogida = "store" in shipping_method.lower() or "recogida" in shipping_method.lower() or "pickup" in shipping_method.lower()
+
             # Classify product type
             product_type = classify_product_type(product_name)
 
@@ -226,6 +231,8 @@ def sync_from_api(full=False):
                 "pvp": pvp,
                 "is_partial_payment": "1" if partial else "0",
                 "payment_group": payment_group if partial else "",
+                "metodo_envio": shipping_method,
+                "es_recogida": "1" if es_recogida else "0",
                 "status": "nuevo",
                 **estimates,
             }

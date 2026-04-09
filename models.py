@@ -126,14 +126,18 @@ def init_db():
         ("arreglo_solicitado", "TEXT DEFAULT '0'"),
         ("arreglo_solicitado_at", "TEXT"),
         ("arreglo_completado", "TEXT DEFAULT '0'"),
+        ("metodo_envio", "TEXT"),
+        ("es_recogida", "TEXT DEFAULT '0'"),
     ]:
         try:
             conn.execute(f"ALTER TABLE orders ADD COLUMN {col} {coltype}")
         except Exception:
             pass  # Column already exists
 
-    # Migrate: unify en_taller → notificado (single workshop status)
-    conn.execute("UPDATE orders SET status='notificado' WHERE status='en_taller'")
+    # Migrate legacy statuses to new ones
+    conn.execute("UPDATE orders SET status='en_taller' WHERE status='notificado'")
+    conn.execute("UPDATE orders SET status='recibido' WHERE status='entregado'")
+    conn.execute("UPDATE orders SET status='enviado' WHERE status='completado'")
 
     # ── Accounting tables ──
     conn.executescript("""
@@ -269,16 +273,45 @@ def get_all_orders(status=None, month=None, search=None):
 
 
 def merge_partial_payments(orders: list) -> list:
-    """Merge split payment orders into single rows.
-    Orders with the same payment_group get combined into one entry."""
+    """Merge split payment orders and absorb Relique Box gifts into their parent jewelry order.
+    1. Orders with the same payment_group get combined into one entry (partial payments).
+    2. Relique Box items that share the same shopify_order_id as a joya get absorbed
+       into that joya row (flag _incluir_joyero = True), instead of showing as separate rows.
+    """
+    # --- Pass 1: group by shopify_order_number to detect joyero+joya combos ---
+    by_order_num = {}
+    for o in orders:
+        num = (o.get("shopify_order_number") or "").strip()
+        if num:
+            by_order_num.setdefault(num, []).append(o)
+
+    # Identify which order numbers have both a joya and a joyero (= gift box)
+    joyero_gift_nums = set()
+    for num, items in by_order_num.items():
+        types = {(i.get("product_type") or "joya") for i in items}
+        if "joyero" in types and len(types) > 1:
+            joyero_gift_nums.add(num)
+
+    # --- Pass 2: merge partial payments + absorb gift joyeros ---
     groups = {}
     merged = []
+
     for o in orders:
+        num = (o.get("shopify_order_number") or "").strip()
+        pt = (o.get("product_type") or "joya")
+
+        # Skip joyero rows that will be absorbed into their parent joya
+        if pt == "joyero" and num in joyero_gift_nums:
+            continue
+
+        # If this joya shares an order with a gift joyero, flag it
+        if pt != "joyero" and num in joyero_gift_nums:
+            o["_incluir_joyero"] = True
+
         pg = o.get("payment_group", "")
         if pg:
             if pg not in groups:
                 groups[pg] = {**o}
-                # Clean up the product name (remove "first/second payment" etc)
                 from shopify_client import clean_payment_name
                 raw = o.get("product_name", "")
                 groups[pg]["product_name"] = clean_payment_name(raw) or raw
@@ -286,15 +319,15 @@ def merge_partial_payments(orders: list) -> list:
                 groups[pg]["_payment_count"] = 1
                 merged.append(groups[pg])
             else:
-                # Merge: sum PVP, combine order numbers
                 groups[pg]["pvp"] = (groups[pg].get("pvp", 0) or 0) + (o.get("pvp", 0) or 0)
                 groups[pg]["_merged_orders"].append(o.get("shopify_order_number", ""))
                 groups[pg]["_payment_count"] = groups[pg].get("_payment_count", 1) + 1
-                # Use earliest date
                 if o.get("fecha_pedido", "") < groups[pg].get("fecha_pedido", ""):
                     groups[pg]["fecha_pedido"] = o["fecha_pedido"]
-                # Combine order numbers for display
                 groups[pg]["shopify_order_number"] = "/".join(groups[pg]["_merged_orders"])
+                # Propagate joyero flag
+                if o.get("_incluir_joyero"):
+                    groups[pg]["_incluir_joyero"] = True
         else:
             merged.append(o)
     return merged
@@ -375,8 +408,8 @@ def set_setting(key: str, value: str):
 def get_dashboard_stats():
     conn = get_db()
     total = conn.execute("SELECT COUNT(*) as c FROM orders").fetchone()["c"]
-    pending = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status != 'entregado'").fetchone()["c"]
-    in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status='notificado'").fetchone()["c"]
+    pending = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status NOT IN ('enviado','archivado','entregado','completado')").fetchone()["c"]
+    in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status IN ('en_taller','notificado')").fetchone()["c"]
     revenue = conn.execute("SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders").fetchone()["s"]
 
     # Joyas vs Joyeros vs Cadenas counts (partial payments grouped = 1 joya)
@@ -550,7 +583,7 @@ def get_supplier_orders(supplier: str):
         # Production orders + pending size changes + pending repairs
         pending = conn.execute(
             """SELECT *, 'produccion' as tipo_tarea FROM orders
-               WHERE status != 'entregado' AND COALESCE(product_type,'joya') != 'joyero'
+               WHERE status NOT IN ('enviado','archivado','entregado','completado') AND COALESCE(product_type,'joya') != 'joyero'
             UNION
             SELECT *, 'cambio_talla' as tipo_tarea FROM orders
                WHERE cambio_talla_solicitado='1' AND cambio_talla_completado!='1'
@@ -576,7 +609,7 @@ def get_supplier_orders(supplier: str):
     elif supplier == "lola":
         pending = conn.execute(
             """SELECT * FROM orders
-               WHERE status != 'entregado'
+               WHERE status NOT IN ('enviado','archivado','entregado','completado')
                  AND (COALESCE(lola_estimado, 0) > 0 OR (piedras_desc IS NOT NULL AND piedras_desc != ''))
                  AND piedras_entregadas != '1'
                ORDER BY fecha_pedido DESC"""
@@ -628,7 +661,7 @@ def mark_joya_terminada(order_id: int):
         """UPDATE orders SET
             joya_terminada='1', joya_terminada_at=?,
             precio_oro_real=?, oro_total_real=?,
-            status='entregado', updated_at=?
+            status='recibido', updated_at=?
            WHERE id=?""",
         (now, round(real_gold, 2), round(oro_real, 2), now, order_id)
     )
@@ -636,7 +669,7 @@ def mark_joya_terminada(order_id: int):
     conn.close()
     log_activity(order_id, "Joya terminada por Barto",
                  f"Oro 24K: {real_gold:.2f} EUR/gr x {peso_est:.1f}gr = {oro_real:.2f} EUR")
-    log_activity(order_id, "Estado cambiado a entregado")
+    log_activity(order_id, "Estado cambiado a Recibido de taller")
 
 
 # ── Bank entries CRUD ──
