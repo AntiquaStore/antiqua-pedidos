@@ -210,6 +210,7 @@
                     <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-5 py-3">Cliente</th>
                     <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-5 py-3">Fecha</th>
                     <th class="text-right text-xs uppercase tracking-wider text-secondary font-semibold px-5 py-3">PVP</th>
+                    <th class="text-center text-xs uppercase tracking-wider text-secondary font-semibold px-5 py-3">Pago</th>
                     <th class="text-center text-xs uppercase tracking-wider text-secondary font-semibold px-5 py-3">Estado</th>
                     <th class="text-left text-xs uppercase tracking-wider text-secondary font-semibold px-5 py-3">Notas</th>
                 </tr>
@@ -241,12 +242,30 @@
                         <td class="px-5 py-4 text-sm text-secondary">{{ order.ring_size or '-' }}</td>
                         <td class="px-5 py-4 text-sm text-dark">{{ order.customer_name or '-' }}</td>
                         <td class="px-5 py-4 text-sm text-secondary">{{ order.fecha_pedido[:10] if order.fecha_pedido else '-' }}</td>
-                        <td class="px-5 py-4 text-sm text-dark text-right tabular-nums">{{ "{:,.0f}".format(order.pvp or 0)|replace(",", ".") }} €</td>
-                        <td class="px-5 py-4 text-center" x-data="statusChanger('{{ order.id }}', '{{ order.status }}', '{{ order.ring_size or '' }}')">
+                        <td class="px-5 py-4 text-sm text-dark text-right tabular-nums">{{ "{:,.0f}".format(order.pvp or 0)|replace(",", ".") }} &euro;</td>
+                        {# ── Pago ── #}
+                        {% set gw = (order.payment_gateway or '')|lower %}
+                        {% set ep = order.estado_pago or 'pendiente' %}
+                        {% set is_auto_paid = gw and ('shopify' in gw or 'paypal' in gw or 'klarna' in gw or 'stripe' in gw or 'redsys' in gw) %}
+                        <td class="px-3 py-4 text-center">
+                            {% if is_auto_paid %}
+                            <span class="text-[11px] font-semibold text-[#4a7c59]">Pagado</span>
+                            {% else %}
+                            <select x-data="pagoChanger('{{ order.id }}', '{{ ep }}')"
+                                    @change="changePago($event.target.value)"
+                                    class="text-[11px] font-semibold border-0 cursor-pointer py-1 px-1 {{ 'text-[#4a7c59] bg-green-50' if ep == 'pagado' else 'text-amber-700 bg-amber-50' }}"
+                                    style="border-radius: 0;">
+                                <option value="pendiente" {{ 'selected' if ep != 'pagado' }} style="background:white;color:#212121;">Pendiente</option>
+                                <option value="pagado" {{ 'selected' if ep == 'pagado' }} style="background:white;color:#212121;">Pagado</option>
+                            </select>
+                            {% endif %}
+                        </td>
+                        {# ── Estado ── #}
+                        <td class="px-3 py-4 text-center" x-data="statusChanger('{{ order.id }}', '{{ order.status }}', '{{ order.ring_size or '' }}')">
                             <select @change="changeStatus($event.target.value)"
                                     :disabled="saving"
-                                    class="text-[11px] uppercase tracking-wide font-semibold text-white pl-2 pr-6 py-1.5 border-0 cursor-pointer {{ status_colors.get(order.status, 'bg-secondary') }}"
-                                    style="min-width: 140px; border-radius: 0;">
+                                    class="text-[11px] uppercase tracking-wide font-semibold text-white pl-2 pr-5 py-1.5 border-0 cursor-pointer {{ status_colors.get(order.status, 'bg-secondary') }}"
+                                    style="border-radius: 0;">
                                 {% for val, label in status_options %}
                                 <option value="{{ val }}" {{ 'selected' if order.status == val }} style="background: white; color: #212121; text-transform: none;">{{ label }}</option>
                                 {% endfor %}

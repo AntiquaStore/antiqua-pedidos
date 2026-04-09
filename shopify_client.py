@@ -216,6 +216,14 @@ def sync_from_api(full=False):
                 cleaned = clean_payment_name(raw_item_name)
                 payment_group = f"{cleaned}|{customer_name}".lower().strip()
 
+            # Payment gateway detection
+            gateways = order.get("payment_gateway_names", [])
+            gateway = gateways[0].lower() if gateways else ""
+            # Auto-detect estado_pago: Shopify Payments, PayPal, Klarna = pagado; transferencia = pendiente
+            auto_pago = "pagado"
+            if "manual" in gateway or "bank" in gateway or "transfer" in gateway or not gateway:
+                auto_pago = "pendiente"
+
             data = {
                 "shopify_order_id": str(order["id"]),
                 "shopify_order_number": order.get("name", ""),
@@ -231,6 +239,8 @@ def sync_from_api(full=False):
                 "pvp": pvp,
                 "is_partial_payment": "1" if partial else "0",
                 "payment_group": payment_group if partial else "",
+                "payment_gateway": gateway,
+                "estado_pago": auto_pago,
                 "metodo_envio": shipping_method,
                 "es_recogida": "1" if es_recogida else "0",
                 "status": "nuevo",

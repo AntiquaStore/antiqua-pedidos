@@ -196,13 +196,9 @@ def order_detail(request: Request, order_id: str):
             "catalog_match": catalog_match,
         })
     except Exception as e:
-        return templates.TemplateResponse(name="order.html", request=request, context={
-            "order": None,
-            "activity_log": [],
-            "notification_preview": None,
-            "catalog_match": None,
-            "error": str(e),
-        })
+        print(f"Order detail error for {order_id}: {e}")
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=f"/?error=Pedido+{order_id}+no+encontrado", status_code=302)
 
 
 @app.get("/products", dependencies=[Depends(require_auth)])
@@ -543,6 +539,21 @@ def notify_supplier_endpoint(order_id: str, supplier: str):
             "ok": True,
             "whatsapp_link": result.get("whatsapp_link"),
         })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/orders/{order_id}/estado-pago")
+async def change_estado_pago(order_id: str, request: Request):
+    """Change payment status for an order (pendiente/pagado)."""
+    try:
+        data = await request.json()
+        estado = data.get("estado_pago", "")
+        if estado not in ("pendiente", "pagado"):
+            return JSONResponse({"ok": False, "error": "Estado de pago no válido"}, status_code=400)
+        update_order(order_id, {"estado_pago": estado})
+        log_activity(order_id, f"Estado de pago: {estado}")
+        return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 

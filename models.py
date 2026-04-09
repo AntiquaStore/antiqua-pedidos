@@ -117,6 +117,8 @@ def init_db():
         ("fase_updated_at", "TEXT"),
         ("auto_notified", "TEXT DEFAULT '0'"),
         ("lead_id", "INTEGER"),
+        ("payment_gateway", "TEXT"),
+        ("estado_pago", "TEXT DEFAULT 'pendiente'"),
         ("cambio_talla_original", "TEXT"),
         ("cambio_talla_nueva", "TEXT"),
         ("cambio_talla_solicitado", "TEXT DEFAULT '0'"),
@@ -231,7 +233,7 @@ def upsert_order(data: dict) -> int:
     cols = ", ".join(data.keys())
     placeholders = ", ".join(["?"] * len(data))
     # Don't overwrite status, joya_terminada, piedras_entregadas on re-sync (preserve manual state changes)
-    preserve_fields = ("shopify_order_id", "product_name", "created_at", "status", "joya_terminada", "joya_terminada_at", "piedras_entregadas", "piedras_entregadas_at")
+    preserve_fields = ("shopify_order_id", "product_name", "created_at", "status", "estado_pago", "joya_terminada", "joya_terminada_at", "piedras_entregadas", "piedras_entregadas_at")
     updates = ", ".join([f"{k}=excluded.{k}" for k in data if k not in preserve_fields])
 
     sql = f"""
@@ -528,11 +530,11 @@ def get_dashboard_stats():
     q_date_end = f"{q_end_year}-{q_end_next:02d}-01"
 
     ventas_trimestre = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {excluir_regalo}",
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {gift_exclude}",
         (q_date_start, q_date_end)
     ).fetchone()["c"]
     facturacion_trimestre = conn.execute(
-        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {excluir_regalo}",
+        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {gift_exclude}",
         (q_date_start, q_date_end)
     ).fetchone()["s"]
 
