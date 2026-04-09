@@ -2,8 +2,16 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Antiqua | Pedidos</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#212121">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Antiqua">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -55,6 +63,14 @@
         }
         ::-webkit-scrollbar-thumb:hover {
             background: #918a77;
+        }
+
+        /* PWA: safe area for notch devices */
+        body { padding-top: env(safe-area-inset-top); }
+
+        /* Mobile: make selects easier to tap */
+        @media (max-width: 640px) {
+            select { min-height: 36px; font-size: 13px !important; }
         }
     </style>
 
@@ -137,5 +153,12 @@
     </footer>
 
     {% block scripts %}{% endblock %}
+
+    <!-- PWA Service Worker -->
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+    }
+    </script>
 </body>
 </html>
