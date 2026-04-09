@@ -429,6 +429,49 @@ def _auto_notify_new_orders(existing_ids_before_sync: set):
         print(f"Auto-notify batch failed: {e}")
 
 
+@app.post("/api/orders/manual")
+async def create_manual_order(request: Request):
+    """Create a manual order (WhatsApp, presencial, etc.) with order number N/A."""
+    try:
+        body = await request.json()
+        from datetime import date as d
+        from catalog import estimate_costs
+
+        product = body.get("product_name", "").strip()
+        customer = body.get("customer_name", "").strip()
+        pvp = float(body.get("pvp", 0))
+        if not product or not customer or pvp <= 0:
+            return JSONResponse({"ok": False, "error": "Faltan campos obligatorios"}, status_code=400)
+
+        estimates = estimate_costs(product, pvp) or {}
+
+        data = {
+            "shopify_order_id": f"MANUAL-{int(__import__('time').time())}",
+            "shopify_order_number": "N/A",
+            "customer_name": customer,
+            "customer_email": body.get("email", "").strip(),
+            "customer_phone": body.get("phone", "").strip(),
+            "customer_address": "",
+            "product_name": product,
+            "product_type": "joya",
+            "ring_size": body.get("ring_size", "").strip(),
+            "variant": "",
+            "fecha_pedido": d.today().isoformat(),
+            "pvp": pvp,
+            "payment_gateway": body.get("via", "whatsapp"),
+            "estado_pago": body.get("estado_pago", "pendiente"),
+            "notes": body.get("notes", "").strip(),
+            "status": "nuevo",
+            **estimates,
+        }
+        from models import upsert_order
+        order_id = upsert_order(data)
+        log_activity(order_id, "Pedido manual creado", f"Vía: {body.get('via', 'whatsapp')}")
+        return JSONResponse({"ok": True, "order_id": order_id})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 @app.post("/api/orders/test")
 async def create_test_order(request: Request):
     """Create a test order for demo purposes."""

@@ -43,6 +43,13 @@
     <h1 class="text-2xl md:text-3xl text-dark">Gestión de Pedidos</h1>
 
     <div class="flex items-center gap-3" x-data="syncHandler()">
+        <!-- New manual order button -->
+        <button @click="$dispatch('open-new-order')"
+                class="inline-flex items-center gap-2 px-5 py-2.5 border border-line text-dark text-xs uppercase tracking-widest font-semibold hover:bg-white transition-colors"
+                x-data>
+            + Nuevo pedido
+        </button>
+
         <!-- Sync button -->
         <button @click="syncShopify()"
                 :disabled="syncing"
@@ -311,7 +318,7 @@
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="8" class="px-5 py-16 text-center">
+                        <td colspan="9" class="px-5 py-16 text-center">
                             <p class="text-secondary text-sm">No hay pedidos</p>
                             <p class="text-secondary/50 text-xs mt-1">Sincroniza con Shopify para importar pedidos</p>
                         </td>
@@ -328,10 +335,110 @@
 </div>
 {% endif %}
 
+<!-- New Manual Order Modal -->
+<div x-data="newOrderForm()" @open-new-order.window="open = true">
+    <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-dark/30">
+        <div @click.outside="open = false" class="bg-white border border-line p-8 w-full max-w-lg mx-4 shadow-lg">
+            <h2 class="text-xl text-dark mb-6" style="font-family: 'Libre Baskerville', serif;">Nuevo pedido manual</h2>
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Pieza *</label>
+                        <input x-model="form.product_name" type="text" class="w-full px-4 py-2 border border-line text-sm" placeholder="Ej: Aluna">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Talla</label>
+                        <input x-model="form.ring_size" type="text" class="w-full px-4 py-2 border border-line text-sm" placeholder="Ej: 12">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Cliente *</label>
+                        <input x-model="form.customer_name" type="text" class="w-full px-4 py-2 border border-line text-sm" placeholder="Nombre completo">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">PVP (con IVA) *</label>
+                        <input x-model="form.pvp" type="number" step="0.01" class="w-full px-4 py-2 border border-line text-sm" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Email</label>
+                        <input x-model="form.email" type="email" class="w-full px-4 py-2 border border-line text-sm" placeholder="cliente@email.com">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Tel&eacute;fono</label>
+                        <input x-model="form.phone" type="tel" class="w-full px-4 py-2 border border-line text-sm" placeholder="+34 600 000 000">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">V&iacute;a de contacto</label>
+                        <select x-model="form.via" class="w-full px-4 py-2 border border-line text-sm bg-white">
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="email">Email</option>
+                            <option value="presencial">Presencial</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Estado pago</label>
+                        <select x-model="form.estado_pago" class="w-full px-4 py-2 border border-line text-sm bg-white">
+                            <option value="pendiente">Pendiente</option>
+                            <option value="pagado">Pagado</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Notas</label>
+                    <textarea x-model="form.notes" class="w-full px-4 py-2 border border-line text-sm" rows="2" placeholder="Detalles adicionales..."></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="open = false" class="px-5 py-2.5 text-xs uppercase tracking-widest font-semibold border border-line text-secondary hover:text-dark transition-colors">
+                    Cancelar
+                </button>
+                <button @click="submit()" :disabled="!form.product_name || !form.customer_name || !form.pvp || submitting"
+                        class="px-5 py-2.5 text-xs uppercase tracking-widest font-semibold bg-dark text-white hover:bg-secondary transition-colors disabled:opacity-50">
+                    <span x-text="submitting ? 'Guardando...' : 'Crear pedido'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+    function pagoChanger(orderId, currentPago) {
+        return {
+            async changePago(newPago) {
+                if (newPago === currentPago) return;
+                try {
+                    const res = await fetch(`/api/orders/${orderId}/estado-pago`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ estado_pago: newPago })
+                    });
+                    if (res.ok) {
+                        const sel = this.$el;
+                        sel.className = sel.className.replace(/text-\[#4a7c59\]|text-amber-700|bg-green-50|bg-amber-50/g, '');
+                        if (newPago === 'pagado') {
+                            sel.classList.add('text-[#4a7c59]', 'bg-green-50');
+                        } else {
+                            sel.classList.add('text-amber-700', 'bg-amber-50');
+                        }
+                        currentPago = newPago;
+                    }
+                } catch (e) {
+                    console.error('Pago change failed:', e);
+                }
+            }
+        };
+    }
+
     const statusBgMap = {
         'nuevo': 'bg-[#5a7b9a]',
         'en_taller': 'bg-taupe',
@@ -397,6 +504,36 @@
                     console.error('Status change failed:', e);
                 }
                 this.saving = false;
+            }
+        };
+    }
+
+    function newOrderForm() {
+        return {
+            open: false,
+            submitting: false,
+            form: {
+                product_name: '', ring_size: '', customer_name: '', pvp: '',
+                email: '', phone: '', via: 'whatsapp', estado_pago: 'pendiente', notes: ''
+            },
+            async submit() {
+                this.submitting = true;
+                try {
+                    const res = await fetch('/api/orders/manual', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(this.form)
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + (data.error || 'desconocido'));
+                    }
+                } catch (e) {
+                    alert('Error de conexión');
+                }
+                this.submitting = false;
             }
         };
     }
