@@ -441,7 +441,14 @@ def get_dashboard_stats():
 
     total = conn.execute("SELECT COUNT(*) as c FROM orders").fetchone()["c"]
     pending = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status NOT IN ('enviado','archivado','entregado','completado')").fetchone()["c"]
-    in_workshop = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status IN ('en_taller','notificado') AND COALESCE(product_type,'joya') != 'joyero'").fetchone()["c"]
+    # In workshop: only joyas (no joyeros), grouped by payment_group (2 payments = 1 piece)
+    iw_grouped = conn.execute(
+        "SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE status IN ('en_taller','notificado') AND COALESCE(product_type,'joya') != 'joyero' AND payment_group IS NOT NULL AND payment_group != ''"
+    ).fetchone()["c"]
+    iw_ungrouped = conn.execute(
+        "SELECT COUNT(*) as c FROM orders WHERE status IN ('en_taller','notificado') AND COALESCE(product_type,'joya') != 'joyero' AND (payment_group IS NULL OR payment_group = '')"
+    ).fetchone()["c"]
+    in_workshop = iw_grouped + iw_ungrouped
     revenue = conn.execute(f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE 1=1 {gift_exclude}").fetchone()["s"]
 
     # Joyas count (excluding gift joyeros)

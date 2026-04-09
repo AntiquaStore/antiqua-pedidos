@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Figtree', sans-serif; color: #212121; background: transparent; }
+        h2 { font-family: 'Libre Baskerville', serif; }
+        .container { max-width: 480px; margin: 0 auto; padding: 20px; }
+        .intro { text-align: center; font-size: 14px; color: #626262; margin-bottom: 30px; line-height: 1.6; }
+        .form { display: flex; flex-direction: column; gap: 18px; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        label.field { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #918a77; margin-bottom: 6px; font-weight: 600; }
+        input[type="text"], input[type="email"], input[type="tel"] {
+            width: 100%; padding: 11px 14px; border: 1px solid #e5e2dc; font-size: 14px;
+            font-family: 'Figtree', sans-serif; color: #212121; background: #fff; outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus { border-color: #918a77; }
+        .checkbox { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: #626262; cursor: pointer; line-height: 1.5; }
+        .checkbox input { margin-top: 3px; accent-color: #918a77; flex-shrink: 0; }
+        .btn {
+            width: 100%; padding: 14px; background: #212121; color: #fff; border: none;
+            font-size: 12px; text-transform: uppercase; letter-spacing: 3px;
+            font-family: 'Figtree', sans-serif; font-weight: 600; cursor: pointer;
+            transition: background 0.2s; margin-top: 8px;
+        }
+        .btn:hover { background: #918a77; }
+        .success { text-align: center; padding: 40px 20px; }
+        .success h2 { font-size: 22px; margin-bottom: 12px; }
+        .success p { font-size: 14px; color: #626262; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    {% if success %}
+    <div class="container success">
+        <h2>Gracias por contactarnos</h2>
+        <p>Hemos recibido tus datos. Nos pondremos en contacto contigo lo antes posible.</p>
+    </div>
+    {% else %}
+    <div class="container">
+        <p class="intro">Rellena tus datos y nos pondremos en contacto contigo.</p>
+        <form action="/contacto" method="POST" class="form">
+            <div class="row">
+                <div>
+                    <label class="field">Nombre *</label>
+                    <input type="text" name="nombre" required placeholder="Tu nombre">
+                </div>
+                <div>
+                    <label class="field">Apellido *</label>
+                    <input type="text" name="apellido" required placeholder="Tu apellido">
+                </div>
+            </div>
+            <div>
+                <label class="field">Email *</label>
+                <input type="email" name="email" required placeholder="tu@email.com">
+            </div>
+            <div>
+                <label class="field">Telefono *</label>
+                <input type="tel" name="telefono" required placeholder="+34 600 000 000">
+            </div>
+            <div>
+                <label class="checkbox">
+                    <input type="checkbox" name="lopd" required>
+                    <span>Acepto el tratamiento de mis datos personales conforme a la <a href="https://antiqua.store/policies/privacy-policy" target="_blank" style="color:#918a77">politica de privacidad</a>. *</span>
+                </label>
+            </div>
+            <div>
+                <label class="checkbox">
+                    <input type="checkbox" name="comercial">
+                    <span>Acepto recibir comunicaciones comerciales de Antiqua.</span>
+                </label>
+            </div>
+            <button type="submit" class="btn">Enviar</button>
+        </form>
+    </div>
+    {% endif %}
+</body>
+</html>

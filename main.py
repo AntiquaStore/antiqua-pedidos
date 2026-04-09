@@ -922,6 +922,38 @@ def leads_page(request: Request, estado: str = None, via: str = None, search: st
         })
 
 
+@app.get("/contacto")
+def contacto_page(request: Request, success: str = None):
+    """Public contact form (embeddable in Shopify via iframe)."""
+    return templates.TemplateResponse("contacto_embed.html", {
+        "request": request, "success": success == "1"
+    })
+
+
+@app.post("/contacto")
+async def contacto_submit(request: Request):
+    """Handle contact form submission."""
+    try:
+        form = await request.form()
+        nombre = form.get("nombre", "").strip()
+        apellido = form.get("apellido", "").strip()
+        full_name = f"{nombre} {apellido}".strip()
+        lead_data = {
+            "nombre": full_name,
+            "telefono": form.get("telefono", "").strip(),
+            "email": form.get("email", "").strip(),
+            "via_contacto": "web",
+            "tipo": "asesoramiento",
+            "notas": f"LOPD: si, Comercial: {'si' if form.get('comercial') else 'no'}",
+        }
+        insert_lead(lead_data)
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/contacto?success=1", status_code=302)
+    except Exception as e:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/contacto?error=1", status_code=302)
+
+
 @app.post("/api/leads/web")
 async def create_lead_web(request: Request):
     """Public endpoint for web contact form (no auth). Accepts form data."""
