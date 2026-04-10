@@ -942,7 +942,7 @@ async def contacto_submit(request: Request):
             "nombre": full_name,
             "telefono": form.get("telefono", "").strip(),
             "email": form.get("email", "").strip(),
-            "via_contacto": "web",
+            "via_contacto": "whatsapp",
             "tipo": "asesoramiento",
             "notas": f"LOPD: si, Comercial: {'si' if form.get('comercial') else 'no'}",
         }
