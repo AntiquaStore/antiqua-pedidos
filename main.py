@@ -922,7 +922,7 @@ def leads_page(request: Request, estado: str = None, via: str = None, search: st
         })
 
 
-@app.get("/contacto")
+@app.get("/data-protection")
 def contacto_page(request: Request, success: str = None):
     """Public contact form (embeddable in Shopify via iframe)."""
     return templates.TemplateResponse("contacto_embed.html", {
@@ -930,7 +930,7 @@ def contacto_page(request: Request, success: str = None):
     })
 
 
-@app.post("/contacto")
+@app.post("/data-protection")
 async def contacto_submit(request: Request):
     """Handle contact form submission."""
     try:
@@ -948,7 +948,7 @@ async def contacto_submit(request: Request):
         }
         insert_lead(lead_data)
         from fastapi.responses import RedirectResponse
-        return RedirectResponse(url="/contacto?success=1", status_code=302)
+        return RedirectResponse(url="/data-protection?success=1", status_code=302)
     except Exception as e:
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/contacto?error=1", status_code=302)
