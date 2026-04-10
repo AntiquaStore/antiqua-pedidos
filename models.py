@@ -1,17 +1,125 @@
 """
-SQLite database models for Antiqua order management.
+Database models for Antiqua order management.
+Supports PostgreSQL (via DATABASE_URL) with SQLite fallback for local dev.
 """
 import sqlite3, os, datetime
 
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+USE_PG = bool(DATABASE_URL)
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "antiqua.db")
 
 
+class PgRowWrapper:
+    """Make psycopg2 rows behave like sqlite3.Row (dict-like access)."""
+    def __init__(self, cursor):
+        self.cursor = cursor
+        self.description = cursor.description
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            cols = [d[0] for d in self.description]
+            return self.cursor.fetchone()[cols.index(key)] if False else None
+        return None
+
+
+class PgConnection:
+    """Wrapper around psycopg2 connection to match sqlite3 interface."""
+    def __init__(self, conn):
+        self._conn = conn
+        self._conn.autocommit = False
+
+    def execute(self, sql, params=None):
+        cur = self._conn.cursor()
+        # Convert ? placeholders to %s for PostgreSQL
+        sql = sql.replace("?", "%s")
+        # Convert SQLite-specific syntax
+        sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+        sql = sql.replace("AUTOINCREMENT", "")
+        sql = sql.replace("datetime('now','localtime')", "NOW()")
+        # Add RETURNING id for INSERT statements to get lastrowid
+        is_insert = sql.strip().upper().startswith("INSERT")
+        if is_insert and "RETURNING" not in sql.upper():
+            sql = sql.rstrip().rstrip(";") + " RETURNING id"
+        try:
+            cur.execute(sql, params or ())
+        except Exception as e:
+            self._conn.rollback()
+            raise
+        pg_cur = PgCursor(cur)
+        if is_insert:
+            try:
+                row = cur.fetchone()
+                if row:
+                    pg_cur.lastrowid = row[0]
+            except:
+                pass
+        return pg_cur
+
+    def executescript(self, sql):
+        cur = self._conn.cursor()
+        # Split by semicolons and execute each
+        sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+        sql = sql.replace("AUTOINCREMENT", "")
+        sql = sql.replace("datetime('now','localtime')", "NOW()")
+        for stmt in sql.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                try:
+                    cur.execute(stmt)
+                except Exception as e:
+                    self._conn.rollback()
+                    # Ignore "already exists" errors
+                    if "already exists" in str(e):
+                        self._conn.rollback()
+                        continue
+                    raise
+        return cur
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
+
+
+class PgCursor:
+    """Wrapper around psycopg2 cursor to match sqlite3 cursor."""
+    def __init__(self, cur):
+        self._cur = cur
+        self.lastrowid = None
+        self.rowcount = cur.rowcount
+        try:
+            if cur.description and cur.statusmessage and cur.statusmessage.startswith("INSERT"):
+                # Try to get lastrowid
+                pass
+        except:
+            pass
+
+    def fetchone(self):
+        row = self._cur.fetchone()
+        if row is None:
+            return None
+        cols = [d[0] for d in self._cur.description]
+        return dict(zip(cols, row))
+
+    def fetchall(self):
+        rows = self._cur.fetchall()
+        if not rows:
+            return []
+        cols = [d[0] for d in self._cur.description]
+        return [dict(zip(cols, row)) for row in rows]
+
+
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+    if USE_PG:
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
+        return PgConnection(conn)
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        return conn
 
 
 def init_db():
@@ -401,7 +509,10 @@ def get_setting(key: str, default=None):
 
 def set_setting(key: str, value: str):
     conn = get_db()
-    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)", (key, value))
+    if USE_PG:
+        conn.execute("INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", (key, value))
+    else:
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)", (key, value))
     conn.commit()
     conn.close()
 
