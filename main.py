@@ -645,6 +645,97 @@ def backup_db():
     })
 
 
+def _send_backup_email():
+    """Send daily backup JSON to info@antiqua.store."""
+    import json, smtplib, os
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.base import MIMEBase
+    from email import encoders
+
+    smtp_user = os.getenv("SMTP_EMAIL", os.getenv("SMTP_USER", ""))
+    smtp_pass = os.getenv("SMTP_PASSWORD", "")
+    if not smtp_user or not smtp_pass:
+        print("Backup email: SMTP not configured, skipping")
+        return
+
+    # Collect all data
+    conn = get_db()
+    tables = {}
+    for table in ["orders", "leads", "activity_log", "bank_entries", "invoices", "invoice_items", "cash_sales"]:
+        try:
+            rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+            tables[table] = [dict(r) for r in rows]
+        except:
+            tables[table] = []
+    conn.close()
+
+    backup_data = {
+        "backup_date": datetime.now().isoformat(),
+        "counts": {k: len(v) for k, v in tables.items()},
+        "data": tables,
+    }
+
+    counts = backup_data["counts"]
+    fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    msg = MIMEMultipart()
+    msg["From"] = smtp_user
+    msg["To"] = "info@antiqua.store"
+    msg["Subject"] = f"Backup Antiqua Pedidos - {datetime.now().strftime('%d/%m/%Y')}"
+
+    body = (
+        f"Backup automático de Antiqua Pedidos — {fecha}\n\n"
+        f"Pedidos: {counts.get('orders', 0)}\n"
+        f"Leads: {counts.get('leads', 0)}\n"
+        f"Movimientos banco: {counts.get('bank_entries', 0)}\n"
+        f"Facturas: {counts.get('invoices', 0)}\n"
+        f"Log de actividad: {counts.get('activity_log', 0)}\n\n"
+        f"Archivo JSON adjunto con todos los datos."
+    )
+    msg.attach(MIMEText(body, "plain"))
+
+    # Attach JSON
+    json_str = json.dumps(backup_data, ensure_ascii=False, indent=2, default=str)
+    part = MIMEBase("application", "json")
+    part.set_payload(json_str.encode("utf-8"))
+    encoders.encode_base64(part)
+    filename = f"backup_antiqua_{datetime.now().strftime('%Y%m%d')}.json"
+    part.add_header("Content-Disposition", f"attachment; filename={filename}")
+    msg.attach(part)
+
+    try:
+        server = smtplib.SMTP(os.getenv("SMTP_HOST", "smtp.gmail.com"), int(os.getenv("SMTP_PORT", "587")))
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, "info@antiqua.store", msg.as_string())
+        server.quit()
+        print(f"Backup email sent to info@antiqua.store ({counts})")
+    except Exception as e:
+        print(f"Backup email failed: {e}")
+
+
+# ── Daily backup scheduler ──
+import threading, time as _time
+
+def _backup_scheduler():
+    """Run backup email every 24h. First backup 1 min after startup, then daily at 3:00 AM."""
+    _time.sleep(60)  # Wait 1 min after startup, then send first backup
+    _send_backup_email()
+    while True:
+        # Calculate seconds until next 3:00 AM
+        now = datetime.now()
+        target = now.replace(hour=3, minute=0, second=0, microsecond=0)
+        if target <= now:
+            target += __import__("datetime").timedelta(days=1)
+        wait = (target - now).total_seconds()
+        _time.sleep(wait)
+        _send_backup_email()
+
+_backup_thread = threading.Thread(target=_backup_scheduler, daemon=True)
+_backup_thread.start()
+
+
 @app.post("/api/sync")
 def sync_orders():
     try:
