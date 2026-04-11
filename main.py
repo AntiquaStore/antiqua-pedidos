@@ -288,7 +288,7 @@ def supplier_portal(request: Request, supplier: str):
             if fecha and len(fecha) >= 10:
                 try:
                     order_date = date.fromisoformat(fecha[:10])
-                    deadline = add_business_days(order_date, 18)
+                    deadline = order_date + timedelta(days=18)
                     days_left = (deadline - today).days
                     order["deadline"] = f"{deadline.day} de {MESES[deadline.month - 1]}"
                     order["days_left"] = days_left
