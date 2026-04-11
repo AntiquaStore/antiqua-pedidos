@@ -163,10 +163,13 @@ def dashboard(request: Request, status: str = None, month: str = None, search: s
         start = (page - 1) * per_page
         orders = all_orders[start:start + per_page]
 
+        cash = get_cash_sales(from_month=month, to_month=month)
+
         return templates.TemplateResponse(name="dashboard.html", request=request, context={
             "orders": orders,
             "stats": stats,
             "gold_price": gold_price_info,
+            "cash_sales": cash,
             "current_status": status or "",
             "current_month": month or "",
             "current_search": search or "",
@@ -179,6 +182,7 @@ def dashboard(request: Request, status: str = None, month: str = None, search: s
             "orders": [],
             "stats": {},
             "gold_price": get_gold_info(),
+            "cash_sales": [],
             "current_status": "",
             "current_month": "",
             "current_search": "",
