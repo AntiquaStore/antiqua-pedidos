@@ -381,7 +381,7 @@ def get_all_orders(status=None, month=None, search=None):
     if search:
         sql += " AND (product_name LIKE ? OR customer_name LIKE ?)"
         params.extend([f"%{search}%", f"%{search}%"])
-    sql += " ORDER BY shopify_order_number DESC, fecha_pedido DESC"
+    sql += " ORDER BY fecha_pedido DESC, id DESC"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
     return merge_partial_payments(rows_to_list(rows))
