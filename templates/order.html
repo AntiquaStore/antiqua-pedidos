@@ -62,7 +62,8 @@
                 'nuevo':      'bg-[#5a7b9a] text-white',
                 'notificado': 'bg-taupe text-white',
                 'entregado':  'bg-[#4a7c59] text-white',
-                'completado': 'bg-dark text-white'
+                'completado': 'bg-dark text-white',
+                'cancelado':  'bg-red-800 text-white'
             } %}
             <span class="inline-block px-3 py-1 text-xs font-semibold uppercase tracking-wide {{ status_colors.get(order.status, 'bg-line text-dark') }}">
                 {{ order.status | replace('_', ' ') | capitalize }}
@@ -124,6 +125,26 @@
             <div>
                 <dt class="text-secondary uppercase tracking-wide text-xs mb-0.5">Variante</dt>
                 <dd class="text-dark">{{ order.variant or '—' }}</dd>
+            </div>
+            {# Envío / Recogida / Joyero badges #}
+            <div class="flex flex-wrap gap-2 mt-3 pt-3 border-t border-line">
+                {% if order.es_recogida == '1' %}
+                <span class="inline-block px-2 py-1 text-[11px] uppercase tracking-wide font-semibold bg-blue-50 text-blue-700 border border-blue-200">Recogida en tienda</span>
+                {% elif order.metodo_envio %}
+                <span class="inline-block px-2 py-1 text-[11px] uppercase tracking-wide font-semibold bg-gray-50 text-gray-600 border border-gray-200">{{ order.metodo_envio }}</span>
+                {% endif %}
+                {% if order.shipping_price and order.shipping_price > 0 %}
+                <span class="inline-block px-2 py-1 text-[11px] uppercase tracking-wide font-semibold bg-green-50 text-green-700 border border-green-200">Envío: {{ "{:,.2f}".format(order.shipping_price) }} &euro;</span>
+                {% endif %}
+                {% if order._incluir_joyero is defined and order._incluir_joyero %}
+                <span class="inline-block px-2 py-1 text-[11px] uppercase tracking-wide font-semibold bg-taupe/10 text-taupe border border-taupe/30">Incluye joyero</span>
+                {% endif %}
+                {% if order.product_type == 'servicio' %}
+                <span class="inline-block px-2 py-1 text-[11px] uppercase tracking-wide font-semibold bg-amber-50 text-amber-700 border border-amber-200">Servicio (no es pedido)</span>
+                {% endif %}
+                {% if order.linked_order_number %}
+                <span class="inline-block px-2 py-1 text-[11px] uppercase tracking-wide font-semibold bg-gray-50 text-gray-600 border border-gray-200">Pedido: {{ order.linked_order_number }}</span>
+                {% endif %}
             </div>
         </dl>
     </div>
@@ -396,6 +417,28 @@
         window.location.reload();
     }
 }">
+    {# Nota Barto PDF link #}
+    {% if order.nota_pdf_path %}
+    <div class="mb-5 p-4 bg-green-50 border border-green-200 flex items-center justify-between">
+        <div>
+            <p class="text-sm font-semibold text-green-800">Nota Barto (NOVAO) &mdash; Revisada</p>
+            {% if order.nota_revisada_at %}
+            <p class="text-xs text-green-600">{{ order.nota_revisada_at[:10] }}</p>
+            {% endif %}
+        </div>
+        {% set pdf_filename = order.nota_pdf_path.split('/')[-1].split('\\')[-1] %}
+        <a href="/notas/{{ pdf_filename }}" target="_blank"
+           class="px-4 py-2 bg-dark text-white text-xs font-semibold uppercase tracking-wide hover:bg-taupe transition-colors">
+            Ver PDF
+        </a>
+    </div>
+    {% elif order.joya_terminada == '1' and order.hechura_real %}
+    <div class="mb-5 p-4 bg-amber-50 border border-amber-200">
+        <p class="text-sm font-semibold text-amber-800">Nota Barto enviada &mdash; Pendiente de revisi&oacute;n por Miguel</p>
+        <p class="text-xs text-amber-600 mt-1">Hechura: {{ "{:,.2f}".format(order.hechura_real or 0) }} &euro; | Diamantes: {{ "{:,.2f}".format(order.diamantes_real or 0) }} &euro; | Metal: {{ "{:,.2f}".format(order.oro_total_real or 0) }} &euro;</p>
+    </div>
+    {% endif %}
+
     <h2 class="text-lg mb-4 text-dark" style="font-family: 'Libre Baskerville', serif;">Post-venta</h2>
 
     <!-- Cambio de talla -->
@@ -498,18 +541,25 @@
     <h2 class="text-lg mb-6 text-dark">Desglose de costes</h2>
 
     {# Revenue summary #}
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 pb-6 border-b border-line">
+    {% set total_con_envio = (order.pvp or 0) + (order.shipping_price or 0) %}
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6 pb-6 border-b border-line">
         <div>
-            <span class="block text-xs text-secondary uppercase tracking-wide mb-1">PVP</span>
+            <span class="block text-xs text-secondary uppercase tracking-wide mb-1">PVP joya</span>
             <span class="text-dark font-semibold">{{ fmt_eur(order.pvp) }}</span>
         </div>
+        {% if order.shipping_price and order.shipping_price > 0 %}
+        <div>
+            <span class="block text-xs text-secondary uppercase tracking-wide mb-1">Envío cobrado</span>
+            <span class="text-dark font-semibold">{{ fmt_eur(order.shipping_price) }}</span>
+        </div>
+        {% endif %}
         <div>
             <span class="block text-xs text-secondary uppercase tracking-wide mb-1">IVA</span>
             <span class="text-dark font-semibold">{{ fmt_eur(order.iva) }}</span>
         </div>
         <div>
             <span class="block text-xs text-secondary uppercase tracking-wide mb-1">Base imponible</span>
-            <span class="text-dark font-semibold">{{ fmt_eur(order.base_imponible) }}</span>
+            <span class="text-dark font-semibold">{{ fmt_eur(total_con_envio / 1.21) }}</span>
         </div>
         <div>
             <span class="block text-xs text-secondary uppercase tracking-wide mb-1">Comisión</span>

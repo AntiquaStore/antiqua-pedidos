@@ -309,11 +309,28 @@ def supplier_portal(request: Request, supplier: str):
                 order["days_left"] = 99
                 order["urgency"] = "ok"
 
+        # Enrich Barto orders with catalog cost breakdown + current gold price
+        gold_price_now = 0.0
+        if supplier == "barto":
+            gold_price_now = get_current_gold_price()
+            from models import get_product_by_name
+            for order in data["pending"] + data["completed"]:
+                product = get_product_by_name(order.get("product_name", ""))
+                if product:
+                    order["_cat_taller_total"] = product.get("taller_total", 0) or 0
+                    order["_cat_diamantes_total"] = product.get("diamantes_total", 0) or 0
+                    order["_cat_diamantes_desc"] = product.get("diamantes_desc", "") or ""
+                else:
+                    order["_cat_taller_total"] = 0
+                    order["_cat_diamantes_total"] = 0
+                    order["_cat_diamantes_desc"] = order.get("diamantes_desc", "") or ""
+
         return templates.TemplateResponse(name="proveedor.html", request=request, context={
             "supplier": supplier,
             "supplier_name": supplier_name,
             "pending": data["pending"],
             "completed": data["completed"],
+            "gold_price": round(gold_price_now, 2),
         })
     except Exception as e:
         return templates.TemplateResponse(name="proveedor.html", request=request, context={
@@ -321,17 +338,191 @@ def supplier_portal(request: Request, supplier: str):
             "supplier_name": "Barto" if supplier == "barto" else "Lola",
             "pending": [],
             "completed": [],
+            "gold_price": 0,
             "error": str(e),
         })
 
 
 @app.post("/proveedor/barto/entregar/{order_id}")
 def barto_mark_done(request: Request, order_id: int):
+    """Legacy simple delivery (no cost breakdown)."""
     try:
         mark_joya_terminada(order_id)
         return RedirectResponse(url="/proveedor/barto", status_code=302)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/proveedor/barto/entregar-nota/{order_id}")
+async def barto_entregar_nota(request: Request, order_id: int):
+    """New delivery flow: Barto submits real costs → saves + sends email to Miguel."""
+    try:
+        form = await request.form()
+        hechura_real = float(form.get("hechura_real", 0) or 0)
+        diamantes_real = float(form.get("diamantes_real", 0) or 0)
+        peso_real = float(form.get("peso_real", 0) or 0)
+        precio_oro_real = float(form.get("precio_oro_real", 0) or 0)
+
+        # Mark piece as finished with real costs
+        mark_joya_terminada(order_id, peso_real=peso_real, precio_oro_real=precio_oro_real,
+                            hechura_real=hechura_real, diamantes_real=diamantes_real)
+
+        # Send email to Miguel with cost breakdown
+        order = get_order(order_id)
+        if order:
+            oro_total = round(peso_real * precio_oro_real, 2)
+            total_nota = round(hechura_real + diamantes_real + oro_total, 2)
+            order_num = order.get("shopify_order_number", str(order_id))
+            pieza = order.get("product_name", "")
+
+            from notifications import send_email, SUPPLIERS
+            to_email = SUPPLIERS["barto"]["email"]  # novaomb18@gmail.com
+            subject = f"Antiqua {order_num}"
+            body = (
+                f"Desglose nota pedido {order_num}\n"
+                f"Pieza: {pieza}\n\n"
+                f"Hechura: {hechura_real:,.2f} EUR\n"
+                f"Diamantes: {diamantes_real:,.2f} EUR\n"
+                f"Metal: {peso_real:.1f}gr x {precio_oro_real:.2f} EUR/gr = {oro_total:,.2f} EUR\n\n"
+                f"Total: {total_nota:,.2f} EUR"
+            )
+            send_email(to_email, subject, body)
+            log_activity(order_id, "Nota enviada a Miguel (NOVAO)",
+                         f"Hechura: {hechura_real:.2f} | Diamantes: {diamantes_real:.2f} | Metal: {oro_total:.2f} | Total: {total_nota:.2f}")
+
+        return RedirectResponse(url="/proveedor/barto", status_code=302)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/proveedor/barto/nota-revisada/{order_id}")
+def barto_nota_revisada(request: Request, order_id: int):
+    """Miguel confirms note is reviewed → generates PDF and saves it."""
+    import datetime as _dt
+    try:
+        order = get_order(order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Pedido no encontrado")
+
+        now = _dt.datetime.now()
+
+        # Generate PDF
+        pdf_path = _generate_nota_pdf(order, now)
+
+        # Update order
+        update_order(order_id, {
+            "nota_revisada": "1",
+            "nota_revisada_at": now.isoformat(),
+            "nota_pdf_path": pdf_path,
+        })
+        log_activity(order_id, "Nota revisada por Miguel", f"PDF: {pdf_path}")
+
+        return RedirectResponse(url="/proveedor/barto", status_code=302)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _generate_nota_pdf(order: dict, review_date) -> str:
+    """Generate a PDF invoice/note for Barto's delivery. Returns the file path."""
+    import os
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+
+    order_num = order.get("shopify_order_number", str(order.get("id", "")))
+    pieza = order.get("product_name", "")
+    talla = order.get("ring_size", "")
+    fecha_entrega = (order.get("joya_terminada_at") or "")[:10]
+
+    hechura = float(order.get("hechura_real") or order.get("barto_estimado", 0) or 0)
+    diamantes = float(order.get("diamantes_real", 0) or 0)
+    peso = float(order.get("peso_real") or order.get("peso_estimado", 0) or 0)
+    precio_gr = float(order.get("precio_oro_real") or order.get("precio_oro_estimado", 0) or 0)
+    oro_total = round(peso * precio_gr, 2)
+    total = round(hechura + diamantes + oro_total, 2)
+
+    # Save to output directory
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "notas_barto")
+    os.makedirs(output_dir, exist_ok=True)
+    safe_num = order_num.replace("#", "").replace("/", "-")
+    filename = f"nota_{safe_num}.pdf"
+    filepath = os.path.join(output_dir, filename)
+
+    c = canvas.Canvas(filepath, pagesize=A4)
+    w, h = A4
+    y = h - 40 * mm
+
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(30 * mm, y, "NOVAO MB18 SL")
+    y -= 8 * mm
+    c.setFont("Helvetica", 10)
+    c.drawString(30 * mm, y, "Nota de entrega")
+    y -= 5 * mm
+    c.setStrokeColorRGB(0.6, 0.6, 0.6)
+    c.line(30 * mm, y, w - 30 * mm, y)
+    y -= 10 * mm
+
+    # Order info
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(30 * mm, y, f"Pedido: {order_num}")
+    y -= 6 * mm
+    c.setFont("Helvetica", 11)
+    pieza_text = f"Pieza: {pieza}"
+    if talla:
+        pieza_text += f" — Talla {talla}"
+    c.drawString(30 * mm, y, pieza_text)
+    y -= 6 * mm
+    c.drawString(30 * mm, y, f"Fecha entrega: {fecha_entrega}")
+    y -= 12 * mm
+
+    # Cost breakdown
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(30 * mm, y, "Desglose:")
+    y -= 8 * mm
+
+    c.setFont("Helvetica", 11)
+    items = [
+        ("Hechura:", f"{hechura:,.2f} EUR"),
+        ("Diamantes:", f"{diamantes:,.2f} EUR"),
+        ("Metal:", f"{peso:.1f} gr x {precio_gr:.2f} EUR/gr = {oro_total:,.2f} EUR"),
+    ]
+    for label, value in items:
+        c.drawString(35 * mm, y, label)
+        c.drawRightString(w - 30 * mm, y, value)
+        y -= 6 * mm
+
+    y -= 4 * mm
+    c.setStrokeColorRGB(0.6, 0.6, 0.6)
+    c.line(30 * mm, y, w - 30 * mm, y)
+    y -= 8 * mm
+
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(35 * mm, y, "TOTAL:")
+    c.drawRightString(w - 30 * mm, y, f"{total:,.2f} EUR")
+    y -= 12 * mm
+
+    c.setStrokeColorRGB(0.6, 0.6, 0.6)
+    c.line(30 * mm, y, w - 30 * mm, y)
+    y -= 8 * mm
+
+    c.setFont("Helvetica-Oblique", 9)
+    fecha_rev = review_date.strftime("%d/%m/%Y")
+    c.drawString(30 * mm, y, f"Revisado por Miguel el {fecha_rev}")
+
+    c.save()
+    return filepath
+
+
+@app.get("/notas/{filename}")
+def serve_nota_pdf(filename: str):
+    """Serve a generated nota PDF."""
+    import os
+    filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "notas_barto", filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="PDF no encontrado")
+    from starlette.responses import FileResponse
+    return FileResponse(filepath, media_type="application/pdf", filename=filename)
 
 
 @app.post("/api/bulk-deliver")
@@ -621,7 +812,7 @@ async def change_estado_pago(order_id: str, request: Request):
 async def change_status(order_id: str, request: Request):
     try:
         VALID_STATUSES = {'nuevo', 'en_taller', 'recibido', 'enviado', 'archivado', 'cambio_talla', 'reparacion',
-                          'notificado', 'entregado', 'completado'}  # legacy compat
+                          'cancelado', 'notificado', 'entregado', 'completado'}  # legacy compat
         data = await request.json()
         new_status = data.get("status")
         if not new_status:
@@ -648,6 +839,7 @@ async def change_status(order_id: str, request: Request):
             'nuevo': 'Nuevo', 'en_taller': 'En taller', 'recibido': 'Recibido de taller',
             'enviado': 'Enviado/Recogido', 'archivado': 'Archivado',
             'cambio_talla': 'Cambio de talla', 'reparacion': 'En reparación',
+            'cancelado': 'Cancelado',
         }
         # Cambio de talla: save details + notify Barto
         whatsapp_link = None
@@ -849,7 +1041,7 @@ def fix_all_status():
     conn.commit()
 
     stats = {}
-    for s in ['nuevo', 'en_taller', 'recibido', 'enviado', 'archivado', 'cambio_talla', 'reparacion']:
+    for s in ['nuevo', 'en_taller', 'recibido', 'enviado', 'archivado', 'cambio_talla', 'reparacion', 'cancelado']:
         stats[s] = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status=?", (s,)).fetchone()["c"]
 
     conn.close()
@@ -867,7 +1059,7 @@ def set_status_range(request: Request):
 def set_status_range_get(request: Request, from_num: int = 0, to_num: int = 0, status: str = "notificado"):
     """Set status for a range. GET /api/set-status-range?from_num=1900&to_num=1908&status=notificado"""
     import datetime as _dt
-    if not from_num or not to_num or status not in ("nuevo", "notificado", "entregado", "completado"):
+    if not from_num or not to_num or status not in ("nuevo", "notificado", "entregado", "completado", "cancelado", "archivado"):
         return JSONResponse({"error": "Params: from_num, to_num, status"}, status_code=400)
     conn = get_db()
     now = _dt.datetime.now().isoformat()

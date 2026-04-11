@@ -47,9 +47,29 @@ def get_access_token():
 
 CHAIN_NAMES = {"forza", "rolo", "3x1"}  # Basic factory chains only
 
+# Order numbers to exclude from sync (e.g. orders from prior year)
+EXCLUDED_ORDER_NUMBERS = {"#1822"}
+
+# Standalone service items (not real jewelry orders)
+_SERVICE_PATTERNS = [
+    r'^grabado$',
+    r'^talla\b',
+    r'^cambio\s+de?\s*talla$',
+    r'^ajuste\s+de?\s*talla$',
+]
+_SERVICE_RE = re.compile("|".join(_SERVICE_PATTERNS), re.IGNORECASE)
+
+
+def is_service_item(product_name: str) -> bool:
+    """Returns True if the item is a standalone service (grabado, talla adjustment), not a jewelry order."""
+    return bool(_SERVICE_RE.match(product_name.strip()))
+
+
 def classify_product_type(product_name: str) -> str:
-    """Classify product as 'joya', 'joyero' (Relique Box), or 'cadena' (basic chains)."""
+    """Classify product as 'joya', 'joyero' (Relique Box), 'cadena' (basic chains), or 'servicio'."""
     lower = product_name.lower().strip()
+    if is_service_item(product_name):
+        return "servicio"
     if "relique" in lower or "box" in lower:
         return "joyero"
     base = re.split(r'\s*-\s*', lower)[0].strip()
@@ -188,7 +208,20 @@ def sync_from_api(full=False):
     count = 0
 
     for order in orders:
-        for item in order.get("line_items", []):
+        order_number = order.get("name", "")
+
+        # Skip excluded orders (e.g. orders from prior year)
+        if order_number in EXCLUDED_ORDER_NUMBERS:
+            continue
+
+        # Calculate shipping price paid by customer (shared across line items)
+        shipping_lines = order.get("shipping_lines", [])
+        shipping_method = shipping_lines[0].get("title", "") if shipping_lines else ""
+        shipping_total = sum(float(s.get("price", 0)) for s in shipping_lines)
+        line_items = order.get("line_items", [])
+        num_items = len(line_items)
+
+        for idx, item in enumerate(line_items):
             raw_item_name = item.get("name", "")
             product_name, ring_size, variant = parse_line_item(raw_item_name)
             pvp = float(item.get("price", 0)) * int(item.get("quantity", 1))
@@ -197,16 +230,22 @@ def sync_from_api(full=False):
             estimates = catalog.estimate_costs(product_name, pvp, gold_price) or {}
 
             billing = order.get("billing_address") or {}
-            shipping = order.get("shipping_address") or {}
-            addr = shipping or billing
+            shipping_addr = order.get("shipping_address") or {}
+            addr = shipping_addr or billing
 
             # Detect pickup vs shipping
-            shipping_lines = order.get("shipping_lines", [])
-            shipping_method = shipping_lines[0].get("title", "") if shipping_lines else ""
             es_recogida = "store" in shipping_method.lower() or "recogida" in shipping_method.lower() or "pickup" in shipping_method.lower()
 
             # Classify product type
             product_type = classify_product_type(product_name)
+
+            # Assign shipping to first non-joyero item (or split if needed)
+            if num_items == 1:
+                item_shipping = shipping_total
+            elif idx == 0 and product_type != "joyero":
+                item_shipping = shipping_total
+            else:
+                item_shipping = 0.0
 
             # Detect partial payments
             partial = is_partial_payment(raw_item_name)
@@ -224,9 +263,15 @@ def sync_from_api(full=False):
             if "manual" in gateway or "bank" in gateway or "transfer" in gateway or not gateway:
                 auto_pago = "pendiente"
 
+            # Auto-cancel: Malena #1845 (financial_status=pending, confirmed cancelled)
+            financial_status = order.get("financial_status", "")
+            auto_status = "nuevo"
+            if order_number == "#1845":
+                auto_status = "cancelado"
+
             data = {
                 "shopify_order_id": str(order["id"]),
-                "shopify_order_number": order.get("name", ""),
+                "shopify_order_number": order_number,
                 "customer_name": customer_name,
                 "customer_email": order.get("email", ""),
                 "customer_phone": billing.get("phone", ""),
@@ -237,13 +282,14 @@ def sync_from_api(full=False):
                 "variant": variant,
                 "fecha_pedido": order.get("created_at", "")[:10],
                 "pvp": pvp,
+                "shipping_price": item_shipping,
                 "is_partial_payment": "1" if partial else "0",
                 "payment_group": payment_group if partial else "",
                 "payment_gateway": gateway,
                 "estado_pago": auto_pago,
                 "metodo_envio": shipping_method,
                 "es_recogida": "1" if es_recogida else "0",
-                "status": "nuevo",
+                "status": auto_status,
                 **estimates,
             }
             models.upsert_order(data)
@@ -356,7 +402,18 @@ def process_webhook_order(order_data: dict) -> list[int]:
     gold_price = float(models.get_setting("gold_price", os.getenv("GOLD_PRICE_PER_GRAM", "160.0")))
     order_ids = []
 
-    for item in order_data.get("line_items", []):
+    order_number = order_data.get("name", "")
+    if order_number in EXCLUDED_ORDER_NUMBERS:
+        return order_ids
+
+    # Calculate shipping
+    shipping_lines = order_data.get("shipping_lines", [])
+    shipping_method = shipping_lines[0].get("title", "") if shipping_lines else ""
+    shipping_total = sum(float(s.get("price", 0)) for s in shipping_lines)
+    line_items = order_data.get("line_items", [])
+    num_items = len(line_items)
+
+    for idx, item in enumerate(line_items):
         raw_item_name = item.get("name", "")
         product_name, ring_size, variant = parse_line_item(raw_item_name)
         pvp = float(item.get("price", 0)) * int(item.get("quantity", 1))
@@ -364,10 +421,21 @@ def process_webhook_order(order_data: dict) -> list[int]:
         estimates = catalog.estimate_costs(product_name, pvp, gold_price) or {}
 
         billing = order_data.get("billing_address") or {}
-        shipping = order_data.get("shipping_address") or {}
-        addr = shipping or billing
+        shipping_addr = order_data.get("shipping_address") or {}
+        addr = shipping_addr or billing
+
+        es_recogida = "store" in shipping_method.lower() or "recogida" in shipping_method.lower() or "pickup" in shipping_method.lower()
 
         product_type = classify_product_type(product_name)
+
+        # Assign shipping to first non-joyero item
+        if num_items == 1:
+            item_shipping = shipping_total
+        elif idx == 0 and product_type != "joyero":
+            item_shipping = shipping_total
+        else:
+            item_shipping = 0.0
+
         partial = is_partial_payment(raw_item_name)
         customer_name = billing.get("name", "")
         payment_group = ""
@@ -375,9 +443,16 @@ def process_webhook_order(order_data: dict) -> list[int]:
             cleaned = clean_payment_name(raw_item_name)
             payment_group = f"{cleaned}|{customer_name}".lower().strip()
 
+        # Payment gateway detection
+        gateways = order_data.get("payment_gateway_names", [])
+        gateway = gateways[0].lower() if gateways else ""
+        auto_pago = "pagado"
+        if "manual" in gateway or "bank" in gateway or "transfer" in gateway or not gateway:
+            auto_pago = "pendiente"
+
         data = {
             "shopify_order_id": str(order_data["id"]),
-            "shopify_order_number": order_data.get("name", ""),
+            "shopify_order_number": order_number,
             "customer_name": customer_name,
             "customer_email": order_data.get("email", ""),
             "customer_phone": billing.get("phone", ""),
@@ -388,8 +463,13 @@ def process_webhook_order(order_data: dict) -> list[int]:
             "variant": variant,
             "fecha_pedido": order_data.get("created_at", "")[:10],
             "pvp": pvp,
+            "shipping_price": item_shipping,
             "is_partial_payment": "1" if partial else "0",
             "payment_group": payment_group if partial else "",
+            "payment_gateway": gateway,
+            "estado_pago": auto_pago,
+            "metodo_envio": shipping_method,
+            "es_recogida": "1" if es_recogida else "0",
             "status": "nuevo",
             **estimates,
         }

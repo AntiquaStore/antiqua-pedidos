@@ -238,6 +238,13 @@ def init_db():
         ("arreglo_completado", "TEXT DEFAULT '0'"),
         ("metodo_envio", "TEXT"),
         ("es_recogida", "TEXT DEFAULT '0'"),
+        ("shipping_price", "REAL DEFAULT 0"),
+        ("linked_order_number", "TEXT"),
+        ("hechura_real", "REAL"),
+        ("diamantes_real", "REAL"),
+        ("nota_revisada", "TEXT DEFAULT '0'"),
+        ("nota_revisada_at", "TEXT"),
+        ("nota_pdf_path", "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE orders ADD COLUMN {col} {coltype}")
@@ -550,50 +557,54 @@ def get_dashboard_stats():
     else:
         gift_exclude = ""
 
-    total = conn.execute("SELECT COUNT(*) as c FROM orders").fetchone()["c"]
-    pending = conn.execute("SELECT COUNT(*) as c FROM orders WHERE status NOT IN ('enviado','archivado','entregado','completado')").fetchone()["c"]
-    # In workshop: only joyas (no joyeros), grouped by payment_group (2 payments = 1 piece)
+    # Exclude cancelled orders and standalone services (grabados, tallas) from revenue
+    cancel_exclude = "AND status != 'cancelado' AND COALESCE(product_type,'joya') != 'servicio'"
+
+    total = conn.execute(f"SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') != 'servicio'").fetchone()["c"]
+    pending = conn.execute(f"SELECT COUNT(*) as c FROM orders WHERE status NOT IN ('enviado','archivado','entregado','completado','cancelado') AND COALESCE(product_type,'joya') != 'servicio'").fetchone()["c"]
+    # In workshop: only joyas (no joyeros/servicios), grouped by payment_group (2 payments = 1 piece)
     iw_grouped = conn.execute(
-        "SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE status IN ('en_taller','notificado') AND COALESCE(product_type,'joya') != 'joyero' AND payment_group IS NOT NULL AND payment_group != ''"
+        "SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE status IN ('en_taller','notificado') AND COALESCE(product_type,'joya') NOT IN ('joyero','servicio') AND payment_group IS NOT NULL AND payment_group != ''"
     ).fetchone()["c"]
     iw_ungrouped = conn.execute(
-        "SELECT COUNT(*) as c FROM orders WHERE status IN ('en_taller','notificado') AND COALESCE(product_type,'joya') != 'joyero' AND (payment_group IS NULL OR payment_group = '')"
+        "SELECT COUNT(*) as c FROM orders WHERE status IN ('en_taller','notificado') AND COALESCE(product_type,'joya') NOT IN ('joyero','servicio') AND (payment_group IS NULL OR payment_group = '')"
     ).fetchone()["c"]
     in_workshop = iw_grouped + iw_ungrouped
-    revenue = conn.execute(f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE 1=1 {gift_exclude}").fetchone()["s"]
+    # Revenue includes shipping when paid by customer: (pvp + COALESCE(shipping_price,0)) / 1.21
+    revenue = conn.execute(f"SELECT COALESCE(SUM((pvp + COALESCE(shipping_price,0)) / 1.21),0) as s FROM orders WHERE 1=1 {gift_exclude} {cancel_exclude}").fetchone()["s"]
 
-    # Joyas count (excluding gift joyeros)
+    # Joyas count (excluding gift joyeros, cancelled, services)
     joyas_grouped = conn.execute(
-        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude}"
+        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude} {cancel_exclude}"
     ).fetchone()["c"]
     joyas_ungrouped = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND (payment_group IS NULL OR payment_group = '') {gift_exclude}"
+        f"SELECT COUNT(*) as c FROM orders WHERE COALESCE(product_type,'joya') = 'joya' AND (payment_group IS NULL OR payment_group = '') {gift_exclude} {cancel_exclude}"
     ).fetchone()["c"]
     joyas_count = joyas_grouped + joyas_ungrouped
 
     # Joyeros vendidos: only those NOT in gift_ids (= purchased independently)
     joyeros_count = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE product_type = 'joyero' {gift_exclude}"
+        f"SELECT COUNT(*) as c FROM orders WHERE product_type = 'joyero' {gift_exclude} {cancel_exclude}"
     ).fetchone()["c"]
     cadenas_count = conn.execute(
-        "SELECT COUNT(*) as c FROM orders WHERE product_type = 'cadena'"
+        f"SELECT COUNT(*) as c FROM orders WHERE product_type = 'cadena' {cancel_exclude}"
     ).fetchone()["c"]
 
-    # Tickets (excluding gift joyeros)
+    # Tickets (excluding gift joyeros, cancelled, services) — includes shipping
     grouped_tickets = conn.execute(f"""
-        SELECT SUM(pvp / 1.21) as ticket_pvp
+        SELECT SUM((pvp + COALESCE(shipping_price,0)) / 1.21) as ticket_pvp
         FROM orders
         WHERE payment_group IS NOT NULL AND payment_group != ''
-          AND COALESCE(product_type,'joya') = 'joya' {gift_exclude}
+          AND COALESCE(product_type,'joya') = 'joya' {gift_exclude} {cancel_exclude}
         GROUP BY payment_group
     """).fetchall()
 
     ungrouped_tickets = conn.execute(f"""
-        SELECT pvp as ticket_pvp
+        SELECT (pvp + COALESCE(shipping_price,0)) / 1.21 as ticket_pvp
         FROM orders
         WHERE (payment_group IS NULL OR payment_group = '')
           AND COALESCE(product_type,'joya') = 'joya'
-          AND pvp > 0 {gift_exclude}
+          AND pvp > 0 {gift_exclude} {cancel_exclude}
     """).fetchall()
 
     all_tickets = [row["ticket_pvp"] for row in grouped_tickets if row["ticket_pvp"]] + \
@@ -604,7 +615,7 @@ def get_dashboard_stats():
     avg_ticket_joyas = total_joyas_revenue / unique_tickets if unique_tickets > 0 else 0
 
     avg_ticket = conn.execute(
-        f"SELECT COALESCE(AVG(pvp),0) as a FROM orders WHERE pvp > 0 {gift_exclude}"
+        f"SELECT COALESCE(AVG(pvp),0) as a FROM orders WHERE pvp > 0 {gift_exclude} {cancel_exclude}"
     ).fetchone()["a"]
 
     avg_ticket_joyas_iva = avg_ticket_joyas * 1.21 if avg_ticket_joyas else 0
@@ -614,35 +625,35 @@ def get_dashboard_stats():
     current_month = now.strftime("%Y-%m")
     current_year = now.strftime("%Y")
 
-    # Ventas mes: group orders by payment_group (2 payments = 1 sale)
+    # Ventas mes: group orders by payment_group (2 payments = 1 sale) — excludes cancelled & services
     ventas_mes_grouped = conn.execute(
-        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE fecha_pedido LIKE ? AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude}",
+        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE fecha_pedido LIKE ? AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude} {cancel_exclude}",
         (f"{current_month}%",)
     ).fetchone()["c"]
     ventas_mes_ungrouped = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND (payment_group IS NULL OR payment_group = '') {gift_exclude}",
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND (payment_group IS NULL OR payment_group = '') {gift_exclude} {cancel_exclude}",
         (f"{current_month}%",)
     ).fetchone()["c"]
     ventas_mes = ventas_mes_grouped + ventas_mes_ungrouped
 
     facturacion_mes = conn.execute(
-        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {gift_exclude}",
+        f"SELECT COALESCE(SUM((pvp + COALESCE(shipping_price,0)) / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {gift_exclude} {cancel_exclude}",
         (f"{current_month}%",)
     ).fetchone()["s"]
 
     # Ventas año: group orders by payment_group
     ventas_ano_grouped = conn.execute(
-        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE fecha_pedido LIKE ? AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude}",
+        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE fecha_pedido LIKE ? AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude} {cancel_exclude}",
         (f"{current_year}%",)
     ).fetchone()["c"]
     ventas_ano_ungrouped = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND (payment_group IS NULL OR payment_group = '') {gift_exclude}",
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido LIKE ? AND (payment_group IS NULL OR payment_group = '') {gift_exclude} {cancel_exclude}",
         (f"{current_year}%",)
     ).fetchone()["c"]
     ventas_ano = ventas_ano_grouped + ventas_ano_ungrouped
 
     facturacion_ano = conn.execute(
-        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {gift_exclude}",
+        f"SELECT COALESCE(SUM((pvp + COALESCE(shipping_price,0)) / 1.21),0) as s FROM orders WHERE fecha_pedido LIKE ? {gift_exclude} {cancel_exclude}",
         (f"{current_year}%",)
     ).fetchone()["s"]
     mes_nombre = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"][now.month - 1]
@@ -664,16 +675,16 @@ def get_dashboard_stats():
 
     # Ventas trimestre: group orders by payment_group
     ventas_trim_grouped = conn.execute(
-        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude}",
+        f"SELECT COUNT(DISTINCT payment_group) as c FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? AND payment_group IS NOT NULL AND payment_group != '' {gift_exclude} {cancel_exclude}",
         (q_date_start, q_date_end)
     ).fetchone()["c"]
     ventas_trim_ungrouped = conn.execute(
-        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? AND (payment_group IS NULL OR payment_group = '') {gift_exclude}",
+        f"SELECT COUNT(*) as c FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? AND (payment_group IS NULL OR payment_group = '') {gift_exclude} {cancel_exclude}",
         (q_date_start, q_date_end)
     ).fetchone()["c"]
     ventas_trimestre = ventas_trim_grouped + ventas_trim_ungrouped
     facturacion_trimestre = conn.execute(
-        f"SELECT COALESCE(SUM(pvp / 1.21),0) as s FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {gift_exclude}",
+        f"SELECT COALESCE(SUM((pvp + COALESCE(shipping_price,0)) / 1.21),0) as s FROM orders WHERE fecha_pedido >= ? AND fecha_pedido < ? {gift_exclude} {cancel_exclude}",
         (q_date_start, q_date_end)
     ).fetchone()["s"]
 
@@ -796,35 +807,63 @@ def mark_piedras_entregadas(order_id: int):
     log_activity(order_id, "Piedras entregadas a Barto", f"Lola marcó entrega el {now}")
 
 
-def mark_joya_terminada(order_id: int):
-    """Barto marks piece finished. Sets joya_terminada='1', timestamp, captures gold price, changes status to 'entregado'."""
+def mark_joya_terminada(order_id: int, peso_real: float = None, precio_oro_real: float = None,
+                        hechura_real: float = None, diamantes_real: float = None):
+    """Barto marks piece finished. Sets joya_terminada='1', timestamp, captures gold price, changes status to 'recibido'.
+    If peso_real/precio_oro_real are provided (from the new nota flow), use those. Otherwise auto-capture."""
     from gold_price import get_current_gold_price
     conn = get_db()
     now = datetime.datetime.now().isoformat()
 
-    # Get order to calculate gold cost
     row = conn.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
     if not row:
         conn.close()
         return
 
     order = dict(row)
-    real_gold = get_current_gold_price()
-    peso_est = float(order.get("peso_estimado", 0) or 0)
-    oro_real = peso_est * real_gold
 
-    conn.execute(
-        """UPDATE orders SET
+    # Use provided values or fall back to auto-capture
+    if precio_oro_real is None:
+        precio_oro_real = get_current_gold_price()
+    if peso_real is None:
+        peso_real = float(order.get("peso_estimado", 0) or 0)
+
+    oro_real = round(peso_real * precio_oro_real, 2)
+
+    update_sql = """UPDATE orders SET
             joya_terminada='1', joya_terminada_at=?,
-            precio_oro_real=?, oro_total_real=?,
-            status='recibido', updated_at=?
-           WHERE id=?""",
-        (now, round(real_gold, 2), round(oro_real, 2), now, order_id)
-    )
+            peso_real=?, precio_oro_real=?, oro_total_real=?,
+            status='recibido', updated_at=?"""
+    params = [now, round(peso_real, 2), round(precio_oro_real, 2), oro_real, now]
+
+    if hechura_real is not None:
+        update_sql += ", hechura_real=?"
+        params.append(round(hechura_real, 2))
+    if diamantes_real is not None:
+        update_sql += ", diamantes_real=?"
+        params.append(round(diamantes_real, 2))
+
+    # Calculate barto_real from hechura + diamantes if both provided
+    if hechura_real is not None and diamantes_real is not None:
+        barto_real_val = round(hechura_real + diamantes_real, 2)
+        update_sql += ", barto_real=?"
+        params.append(barto_real_val)
+
+    # Calculate cmv_real if we have all components
+    lola_real = float(order.get("lola_real") or order.get("lola_estimado", 0) or 0)
+    barto_total = (hechura_real or 0) + (diamantes_real or 0) if hechura_real is not None else float(order.get("barto_estimado", 0) or 0)
+    cmv_real_val = round(lola_real + barto_total + oro_real, 2)
+    update_sql += ", cmv_real=?"
+    params.append(cmv_real_val)
+
+    update_sql += " WHERE id=?"
+    params.append(order_id)
+
+    conn.execute(update_sql, params)
     conn.commit()
     conn.close()
     log_activity(order_id, "Joya terminada por Barto",
-                 f"Oro 24K: {real_gold:.2f} EUR/gr x {peso_est:.1f}gr = {oro_real:.2f} EUR")
+                 f"Oro 24K: {precio_oro_real:.2f} EUR/gr x {peso_real:.1f}gr = {oro_real:.2f} EUR")
     log_activity(order_id, "Estado cambiado a Recibido de taller")
 
 
