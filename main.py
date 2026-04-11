@@ -110,22 +110,10 @@ def on_startup():
         print(f"Gold price at startup: 24k={gold_info['price_24k_gram']} EUR/g (source: {gold_info['source']})")
     except Exception as e:
         print(f"Could not fetch gold price at startup: {e}")
-    # Auto-sync orders from Shopify API on startup (Shopify = single source of truth)
-    try:
-        stats = get_dashboard_stats()
-        if stats.get("total", 0) == 0:
-            # DB is empty — full sync from Shopify API
-            n = sync_from_api(full=True)
-            if n > 0:
-                print(f"Auto-synced {n} orders from Shopify API")
-            else:
-                # Fallback to CSV if API fails
-                csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "orders_export.csv")
-                if os.path.exists(csv_path):
-                    n = sync_from_csv(csv_path)
-                    print(f"Fallback: imported {n} orders from CSV")
-    except Exception as e:
-        print(f"Auto-import failed: {e}")
+    # SAFETY: Never auto-sync on startup. Manual orders, leads, and status changes
+    # would be lost if the DB appears empty due to a transient connection error.
+    # Use /api/sync endpoint manually instead.
+    print("Startup complete. Use /api/sync to import new Shopify orders.")
 
     # Fix product_type for orders missing it (ensures merge works correctly)
     try:

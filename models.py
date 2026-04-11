@@ -251,10 +251,8 @@ def init_db():
         except Exception:
             pass  # Column already exists
 
-    # Migrate legacy statuses to new ones
-    conn.execute("UPDATE orders SET status='en_taller' WHERE status='notificado'")
-    conn.execute("UPDATE orders SET status='recibido' WHERE status='entregado'")
-    conn.execute("UPDATE orders SET status='enviado' WHERE status='completado'")
+    # Legacy status migration removed — was running on every startup and could
+    # overwrite intentional status changes. One-time migration already done.
 
     # ── Accounting tables ──
     conn.executescript("""
