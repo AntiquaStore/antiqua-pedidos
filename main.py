@@ -843,7 +843,7 @@ async def create_manual_order(request: Request):
             "product_type": "joya",
             "ring_size": body.get("ring_size", "").strip(),
             "variant": "",
-            "fecha_pedido": d.today().isoformat(),
+            "fecha_pedido": body.get("fecha_pedido", "").strip() or d.today().isoformat(),
             "pvp": pvp,
             "payment_gateway": metodo_pago,
             "estado_pago": estado_pago,

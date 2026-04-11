@@ -456,7 +456,7 @@
                         <input x-model="form.ring_size" type="text" class="w-full px-4 py-2 border border-line text-sm" placeholder="Ej: 12">
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Cliente *</label>
                         <input x-model="form.customer_name" type="text" class="w-full px-4 py-2 border border-line text-sm" placeholder="Nombre completo">
@@ -464,6 +464,10 @@
                     <div>
                         <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">PVP (con IVA) *</label>
                         <input x-model="form.pvp" type="number" step="0.01" class="w-full px-4 py-2 border border-line text-sm" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-secondary font-semibold mb-1">Fecha pedido</label>
+                        <input x-model="form.fecha_pedido" type="date" class="w-full px-4 py-2 border border-line text-sm">
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
@@ -630,6 +634,7 @@
             submitting: false,
             form: {
                 product_name: '', ring_size: '', customer_name: '', pvp: '',
+                fecha_pedido: new Date().toISOString().slice(0,10),
                 email: '', phone: '', via: 'whatsapp', metodo_pago: 'transferencia', estado_pago: 'pendiente', notes: ''
             },
             async submit() {
