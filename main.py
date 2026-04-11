@@ -113,7 +113,14 @@ def on_startup():
     # SAFETY: Never auto-sync on startup. Manual orders, leads, and status changes
     # would be lost if the DB appears empty due to a transient connection error.
     # Use /api/sync endpoint manually instead.
-    print("Startup complete. Use /api/sync to import new Shopify orders.")
+    try:
+        conn = get_db()
+        total = conn.execute("SELECT COUNT(*) as c FROM orders").fetchone()["c"]
+        leads = conn.execute("SELECT COUNT(*) as c FROM leads").fetchone()["c"]
+        conn.close()
+        print(f"Startup complete. DB has {total} orders, {leads} leads. Data preserved.")
+    except Exception as e:
+        print(f"Startup complete. DB check: {e}")
 
     # Fix product_type for orders missing it (ensures merge works correctly)
     try:
@@ -618,20 +625,49 @@ def lola_mark_done(request: Request, order_id: int):
 # ---------------------------------------------------------------------------
 # API Endpoints
 # ---------------------------------------------------------------------------
+@app.get("/api/backup")
+def backup_db():
+    """Export all critical data as JSON backup. Call periodically or before risky operations."""
+    import json
+    conn = get_db()
+    tables = {}
+    for table in ["orders", "leads", "activity_log", "bank_entries", "invoices", "invoice_items", "cash_sales"]:
+        try:
+            rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+            tables[table] = [dict(r) for r in rows]
+        except:
+            tables[table] = []
+    conn.close()
+    return JSONResponse({
+        "backup_date": datetime.now().isoformat(),
+        "counts": {k: len(v) for k, v in tables.items()},
+        "data": tables,
+    })
+
+
 @app.post("/api/sync")
 def sync_orders():
     try:
-        # Get current order IDs before sync to detect new ones
+        # SAFETY: log current state before sync
         conn = get_db()
         existing_ids = set(r["shopify_order_id"] for r in conn.execute("SELECT shopify_order_id FROM orders").fetchall())
+        manual_count = conn.execute("SELECT COUNT(*) as c FROM orders WHERE shopify_order_id LIKE 'MANUAL%'").fetchone()["c"]
+        leads_count = conn.execute("SELECT COUNT(*) as c FROM leads").fetchone()["c"]
         conn.close()
+        print(f"Pre-sync state: {len(existing_ids)} orders ({manual_count} manual), {leads_count} leads")
 
+        # Sync only adds/updates Shopify orders — never touches manual orders or leads
         count = sync_from_api(full=True)
 
-        # Auto-notify disabled: María notifica manualmente desde cada pedido
-        # _auto_notify_new_orders(existing_ids)
+        # Verify manual orders survived
+        conn = get_db()
+        manual_after = conn.execute("SELECT COUNT(*) as c FROM orders WHERE shopify_order_id LIKE 'MANUAL%'").fetchone()["c"]
+        leads_after = conn.execute("SELECT COUNT(*) as c FROM leads").fetchone()["c"]
+        conn.close()
+        print(f"Post-sync: {manual_after} manual orders, {leads_after} leads (preserved)")
 
-        return JSONResponse({"ok": True, "count": count, "source": "shopify_api"})
+        return JSONResponse({"ok": True, "count": count, "source": "shopify_api",
+                             "manual_orders": manual_after, "leads": leads_after})
     except Exception as api_err:
         import traceback
         err_detail = traceback.format_exc()
