@@ -397,7 +397,7 @@ async def barto_entregar_nota(request: Request, order_id: int):
 
 @app.post("/proveedor/barto/nota-revisada/{order_id}")
 def barto_nota_revisada(request: Request, order_id: int):
-    """Miguel confirms note is reviewed → generates PDF and saves it."""
+    """Miguel confirms note is reviewed → generates PDF, sends to info@antiqua.store, saves."""
     import datetime as _dt
     try:
         order = get_order(order_id)
@@ -409,17 +409,82 @@ def barto_nota_revisada(request: Request, order_id: int):
         # Generate PDF
         pdf_path = _generate_nota_pdf(order, now)
 
+        # Send PDF by email to Antiqua
+        order_num = order.get("shopify_order_number", str(order_id))
+        _send_nota_pdf_email(pdf_path, order_num, order)
+
         # Update order
         update_order(order_id, {
             "nota_revisada": "1",
             "nota_revisada_at": now.isoformat(),
             "nota_pdf_path": pdf_path,
         })
-        log_activity(order_id, "Nota revisada por Miguel", f"PDF: {pdf_path}")
+        log_activity(order_id, "Nota revisada por Miguel",
+                     f"PDF generado y enviado a info@antiqua.store")
 
         return RedirectResponse(url="/proveedor/barto", status_code=302)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _send_nota_pdf_email(pdf_path: str, order_num: str, order: dict):
+    """Send the nota PDF to info@antiqua.store."""
+    import os, smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.base import MIMEBase
+    from email import encoders
+
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_EMAIL", os.getenv("SMTP_USER", ""))
+    smtp_pass = os.getenv("SMTP_PASSWORD", "")
+
+    if not smtp_user or not smtp_pass:
+        print("SMTP not configured, skipping nota email")
+        return
+
+    to_email = "info@antiqua.store"
+    pieza = order.get("product_name", "")
+
+    msg = MIMEMultipart()
+    msg["From"] = smtp_user
+    msg["To"] = to_email
+    msg["Subject"] = f"Nota NOVAO - {order_num} {pieza}"
+
+    hechura = float(order.get("hechura_real") or 0)
+    diamantes = float(order.get("diamantes_real") or 0)
+    oro = float(order.get("oro_total_real") or 0)
+    total = round(hechura + diamantes + oro, 2)
+
+    body = (
+        f"Nota revisada por Miguel para el pedido {order_num} ({pieza}).\n\n"
+        f"Hechura: {hechura:,.2f} EUR\n"
+        f"Diamantes: {diamantes:,.2f} EUR\n"
+        f"Metal: {oro:,.2f} EUR\n"
+        f"Total: {total:,.2f} EUR\n\n"
+        f"PDF adjunto."
+    )
+    msg.attach(MIMEText(body, "plain"))
+
+    # Attach PDF
+    filename = os.path.basename(pdf_path)
+    with open(pdf_path, "rb") as f:
+        part = MIMEBase("application", "pdf")
+        part.set_payload(f.read())
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", f"attachment; filename={filename}")
+        msg.attach(part)
+
+    try:
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, to_email, msg.as_string())
+        server.quit()
+        print(f"Nota PDF sent to {to_email} for {order_num}")
+    except Exception as e:
+        print(f"Failed to send nota email: {e}")
 
 
 def _generate_nota_pdf(order: dict, review_date) -> str:
