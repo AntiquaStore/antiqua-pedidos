@@ -101,7 +101,11 @@
                             get total() { return +(this.hechura + this.diamantes + this.metal).toFixed(2) },
                             submitting: false
                         }">
-                            <tr class="border-b border-line hover:bg-[#faf9f7] cursor-pointer transition-colors {{ 'bg-red-50/30' if order.urgente == '1' }}"
+                            <tr class="border-b border-line cursor-pointer transition-colors
+                                {% if order.urgency == 'overdue' %}bg-red-100 hover:bg-red-200
+                                {% elif order.urgency == 'urgent' %}bg-red-50 hover:bg-red-100
+                                {% elif order.urgency == 'warning' %}bg-amber-50 hover:bg-amber-100
+                                {% else %}bg-green-50 hover:bg-green-100{% endif %}"
                                 @click="open = !open">
                                 <td class="px-4 py-3">
                                     <span class="text-xs text-secondary">{{ order.shopify_order_number }}</span>
@@ -110,12 +114,8 @@
                                     <span class="ml-1 inline-block px-1 py-0.5 text-[8px] font-bold bg-red-600 text-white uppercase">URG</span>
                                     {% endif %}
                                 </td>
-                                <td class="px-4 py-3 text-sm text-secondary text-center">{{ order.ring_size or '-' }}</td>
-                                <td class="px-4 py-3 text-sm font-semibold
-                                    {% if order.urgency == 'overdue' %}text-red-800
-                                    {% elif order.urgency == 'urgent' %}text-red-600
-                                    {% elif order.urgency == 'warning' %}text-amber-600
-                                    {% else %}text-green-700{% endif %}">
+                                <td class="px-4 py-3 text-sm text-dark text-center">{{ order.ring_size or '-' }}</td>
+                                <td class="px-4 py-3 text-sm font-semibold text-dark">
                                     {{ order.deadline or '-' }}
                                     <span class="block text-[10px] font-normal opacity-70">{% if order.urgency == 'overdue' %}Pasada{% elif order.days_left is defined and order.days_left >= 0 %}{{ order.days_left }}d{% endif %}</span>
                                 </td>
