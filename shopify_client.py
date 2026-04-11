@@ -221,10 +221,28 @@ def sync_from_api(full=False):
         line_items = order.get("line_items", [])
         num_items = len(line_items)
 
-        for idx, item in enumerate(line_items):
+        # First pass: separate jewelry items from service items (grabado, talla, etc.)
+        joya_items = []
+        service_items = []
+        for item in line_items:
+            raw_name = item.get("name", "")
+            pname, _, _ = parse_line_item(raw_name)
+            if is_service_item(pname):
+                service_items.append(item)
+            else:
+                joya_items.append(item)
+
+        # Add service item prices to the first joya in the same order
+        service_extra = sum(float(s.get("price", 0)) * int(s.get("quantity", 1)) for s in service_items)
+
+        for idx, item in enumerate(joya_items or line_items):
             raw_item_name = item.get("name", "")
             product_name, ring_size, variant = parse_line_item(raw_item_name)
             pvp = float(item.get("price", 0)) * int(item.get("quantity", 1))
+
+            # Add service extras (grabado, talla) to the first joya
+            if idx == 0 and service_extra > 0 and joya_items:
+                pvp += service_extra
 
             # Get cost estimates from catalog
             estimates = catalog.estimate_costs(product_name, pvp, gold_price) or {}
@@ -413,10 +431,26 @@ def process_webhook_order(order_data: dict) -> list[int]:
     line_items = order_data.get("line_items", [])
     num_items = len(line_items)
 
-    for idx, item in enumerate(line_items):
+    # Separate jewelry from service items (grabado, talla)
+    joya_items = []
+    service_items = []
+    for item in line_items:
+        raw_name = item.get("name", "")
+        pname, _, _ = parse_line_item(raw_name)
+        if is_service_item(pname):
+            service_items.append(item)
+        else:
+            joya_items.append(item)
+    service_extra = sum(float(s.get("price", 0)) * int(s.get("quantity", 1)) for s in service_items)
+
+    for idx, item in enumerate(joya_items or line_items):
         raw_item_name = item.get("name", "")
         product_name, ring_size, variant = parse_line_item(raw_item_name)
         pvp = float(item.get("price", 0)) * int(item.get("quantity", 1))
+
+        # Add service extras to first joya
+        if idx == 0 and service_extra > 0 and joya_items:
+            pvp += service_extra
 
         estimates = catalog.estimate_costs(product_name, pvp, gold_price) or {}
 
