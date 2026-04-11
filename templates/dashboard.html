@@ -491,16 +491,48 @@
                 </thead>
                 <tbody>
                     {% for cs in cash_sales %}
-                    <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors" x-data="{ deleting: false }">
-                        <td class="px-5 py-3 text-sm text-secondary">{% if cs.fecha %}{{ cs.fecha[8:10] }}/{{ cs.fecha[5:7] }}/{{ cs.fecha[2:4] }}{% else %}-{% endif %}</td>
-                        <td class="px-5 py-3 text-sm text-dark">{{ cs.cliente or '-' }}</td>
-                        <td class="px-5 py-3 text-sm text-dark">{{ cs.producto or '-' }}</td>
-                        <td class="px-5 py-3 text-sm text-dark text-right tabular-nums">{{ "{:,.0f}".format(cs.importe or 0)|replace(",", ".") }} &euro;</td>
-                        <td class="px-5 py-3 text-xs text-secondary">{{ cs.notas or '' }}</td>
-                        <td class="px-3 py-3 text-center">
-                            <button @click="if(confirm('Eliminar esta venta?')) { deleting=true; fetch('/api/cash-sales/{{ cs.id }}', {method:'DELETE'}).then(()=>location.reload()) }"
-                                    :disabled="deleting"
-                                    class="text-xs text-red-400 hover:text-red-600 transition-colors">&times;</button>
+                    <tr class="border-b border-line hover:bg-[#faf9f7] transition-colors"
+                        x-data="{
+                            editing: false, saving: false, deleting: false,
+                            fecha: '{{ cs.fecha or '' }}',
+                            cliente: '{{ (cs.cliente or '')|e }}',
+                            producto: '{{ (cs.producto or '')|e }}',
+                            importe: {{ cs.importe or 0 }},
+                            notas: '{{ (cs.notas or '')|e }}',
+                            async save() {
+                                this.saving = true;
+                                await fetch('/api/cash-sales/{{ cs.id }}', {
+                                    method: 'PUT',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({fecha:this.fecha, cliente:this.cliente, producto:this.producto, importe:this.importe, notas:this.notas})
+                                });
+                                this.saving = false;
+                                this.editing = false;
+                                location.reload();
+                            }
+                        }">
+                        <template x-if="!editing">
+                            <td class="px-5 py-3 text-sm text-secondary cursor-pointer" @click="editing=true" colspan="0">
+                        </template>
+                        <!-- View mode -->
+                        <td x-show="!editing" @click="editing=true" class="px-5 py-3 text-sm text-secondary cursor-pointer">{% if cs.fecha %}{{ cs.fecha[8:10] }}/{{ cs.fecha[5:7] }}/{{ cs.fecha[2:4] }}{% else %}-{% endif %}</td>
+                        <td x-show="!editing" @click="editing=true" class="px-5 py-3 text-sm text-dark cursor-pointer">{{ cs.cliente or '-' }}</td>
+                        <td x-show="!editing" @click="editing=true" class="px-5 py-3 text-sm text-dark cursor-pointer">{{ cs.producto or '-' }}</td>
+                        <td x-show="!editing" @click="editing=true" class="px-5 py-3 text-sm text-dark text-right tabular-nums cursor-pointer">{{ "{:,.0f}".format(cs.importe or 0)|replace(",", ".") }} &euro;</td>
+                        <td x-show="!editing" @click="editing=true" class="px-5 py-3 text-xs text-secondary cursor-pointer">{{ cs.notas or '' }}</td>
+                        <td x-show="!editing" class="px-3 py-3 text-center">
+                            <button @click.stop="if(confirm('Eliminar?')) { deleting=true; fetch('/api/cash-sales/{{ cs.id }}', {method:'DELETE'}).then(()=>location.reload()) }"
+                                    :disabled="deleting" class="text-xs text-red-400 hover:text-red-600">&times;</button>
+                        </td>
+                        <!-- Edit mode -->
+                        <td x-show="editing" x-cloak class="px-2 py-2"><input type="date" x-model="fecha" class="w-full px-2 py-1 border border-line text-sm"></td>
+                        <td x-show="editing" x-cloak class="px-2 py-2"><input type="text" x-model="cliente" class="w-full px-2 py-1 border border-line text-sm"></td>
+                        <td x-show="editing" x-cloak class="px-2 py-2"><input type="text" x-model="producto" class="w-full px-2 py-1 border border-line text-sm"></td>
+                        <td x-show="editing" x-cloak class="px-2 py-2"><input type="number" step="0.01" x-model.number="importe" class="w-full px-2 py-1 border border-line text-sm text-right"></td>
+                        <td x-show="editing" x-cloak class="px-2 py-2"><input type="text" x-model="notas" class="w-full px-2 py-1 border border-line text-sm"></td>
+                        <td x-show="editing" x-cloak class="px-2 py-2 text-center whitespace-nowrap">
+                            <button @click="save()" :disabled="saving" class="text-xs text-green-600 hover:text-green-800 font-semibold mr-1">&#10003;</button>
+                            <button @click="editing=false" class="text-xs text-secondary hover:text-dark">&#10005;</button>
                         </td>
                     </tr>
                     {% endfor %}

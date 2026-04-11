@@ -1619,6 +1619,23 @@ async def add_cash_sale(request: Request):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
+@app.put("/api/cash-sales/{sale_id}", dependencies=[Depends(require_auth)])
+async def update_cash_sale_route(request: Request, sale_id: int):
+    try:
+        data = await request.json()
+        conn = get_db()
+        conn.execute(
+            "UPDATE cash_sales SET fecha=?, cliente=?, producto=?, importe=?, notas=? WHERE id=?",
+            (data.get("fecha"), data.get("cliente"), data.get("producto"),
+             float(data.get("importe", 0)), data.get("notas", ""), sale_id)
+        )
+        conn.commit()
+        conn.close()
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 @app.delete("/api/cash-sales/{sale_id}", dependencies=[Depends(require_auth)])
 def delete_cash_sale_route(request: Request, sale_id: int):
     try:
